@@ -10,7 +10,7 @@ Section ODE.
 
   (* An ordinary differential inclusions is a predicate over
      derivatives and their variables. *)
-  Definition ODI : Type := state -> state -> Prop.
+  Definition ODI : Type := state -> state -> R -> Prop.
 
   (* A trajectory of the system is a mapping from time to state.
      We could restrict time to be nonegreal, but this probably makes
@@ -24,7 +24,7 @@ Section ODE.
     exists (D : R -> state),
     forall (t : R),
       is_derive F t (D t) /\
-      (0 <= t -> f (D t) (F t)).
+      (0 <= t -> f (D t) (F t) t).
 
   (* A barrier function maps states to scalars. *)
   Definition barrier : Type := state -> R.
@@ -186,8 +186,8 @@ Section ODE.
           continuous (fun t : R => dB (x' t) (x t)) t) ->
       forall (f : ODI) (x0 : state),
         B x0 <= 0 ->
-        (exists a : R, forall (x' x : state),
-              f x' x -> dB x' x <= a * B x) ->
+        (exists a : R, forall (x' x : state) t,
+              f x' x t -> dB x' x <= a * B x) ->
         forall (F : trajectory),
           solution f x0 F ->
           forall (t : R),
@@ -199,69 +199,40 @@ Section ODE.
       with (f:=fun t => B (F t)) (df:=fun t => dB (x t) (F t)).
       { intros. apply H0. }
       { simpl. intros. apply H. apply H5. }
-      { intros. apply H2. apply H5. assumption. }
+      { intros. eapply H2. eapply H5. assumption. }
       { assumption. } }
     pose proof (exp_pos (a * t)). subst. psatz R.
   Qed.
 
-(*
-  Theorem barrier_safety_boundary :
+  Definition solution_sampled_data (f : state -> state -> state -> Prop) (u : state -> state)
+             (F : trajectory) (T : R) : Prop :=
+    exists (D : R -> state),
+    (forall (t : R),
+        is_derive F t (D t)) /\
+    exists (sample : R -> R),
+      (forall x, 0 <= x - sample x <= T) /\
+      forall t : R, f (D t) (F t) (u (F (sample t))).
+
+  Theorem barrier_exp_condition_sampled :
     forall (B : barrier) (dB : state -> state -> R),
       derive_barrier B dB ->
-      (forall t, continuous B t) ->
-      forall (f : ODI) (x0 : state),
-        B x0 <= 0 ->
-        (forall (x' x : state), B x = 0 -> f x' x -> dB x' x <= 0) ->
-        forall (F : trajectory),
-          solution f x0 F ->
+      (forall t x' x,
+          continuous (fun t : R => dB (x' t) (x t)) t) ->
+      forall (f : state -> state -> state -> Prop) (F : trajectory)
+             (u : state -> state) (lambda T : R) (rel : state -> state -> Prop),
+        solution_sampled_data f u F T ->
+        (forall a b, 0 <= b - a <= T -> rel (F a) (F b)) ->
+        (forall (x' x xb : state),
+              rel xb x -> f x' x (u xb) -> dB x' x <= lambda * B x) ->
           forall (t : R),
-            0 <= t -> B (F t) <= 0.
+            0 <= t -> B (F 0) <= 0 -> B (F t) <= 0.
   Proof.
-    intros. apply Rnot_gt_le. intro.
-    assert (F 0 = x0).
-    { unfold solution in *. tauto. }
-    assert (0 < t).
-    { destruct H4; auto. subst. psatzl R. }
-    assert (forall t, continuous (fun t => B (F t)) t) as HBFcont.
-    { intros. apply continuous_comp.
-      { eapply solution_continuous; eauto. }
-      { auto. } }
-    (* Construct the set of all times r < t such that B (F r) = 0. *)
-    pose (S:=fun r => r <= t /\ B (F r) = 0).
-    (* Get the least upper bound for S. *)
-    assert {m : R | is_lub S m} as Hlub.
-    { assert (bound S).
-      { exists t. unfold is_upper_bound, S. intros. psatzl R. }
-      assert (exists x : R, S x).
-      { assert (continuity (fun t => B (F t))) as HBFcont'.
-        { unfold continuity. intros. apply continuity_pt_filterlim.
-          apply HBFcont. }
-        pose proof (IVT_gen _ 0 t 0 HBFcont') as HIVT. simpl in *.
-        rewrite (Rmin_left 0 t) in * by psatzl R.
-        rewrite (Rmax_right 0 t) in * by psatzl R.
-        assert (B (F 0) <= B (F t)) by (subst; psatzl R).
-        rewrite Rmin_left in *; auto.
-        rewrite Rmax_right in *; auto.
-        destruct HIVT.
-        { subst. psatzl R. }
-        { exists x. unfold S. tauto. } }
-      apply completeness; auto. }
-    (* S is closed *)
-    assert (closed S).
-    { unfold closed, S. apply open_ext with (D:=fun x => x > t \/ B (F x) <> 0).
-      { intros. psatzl R. }
-      { apply open_or.
-        { apply open_gt. }
-        { apply open_comp with (D:=fun u => u <> 0).
-          { intros. apply HBFcont. }
-          { apply open_neq. } } } }
-    destruct Hlub as [lub Hlub].
-    (* The least upper bound of S is in S *)
-    assert (S lub) by (apply lub_closed_in_set; auto).
-    unfold derive_barrier, solution in *.
-    destruct H3. destruct H10. specialize (H10 lub).
-    destruct H10. specialize (H F x lub H10). simpl in *.
-    specialize (H2 (x lub) (F lub)).
-*)
+    intros. unfold solution_sampled_data in *. destruct H1 as [D [? [sample ?]]].
+    assert (B (F t) <= B (F 0) * exp (lambda * t)).
+    { apply exp_integral
+      with (f:=fun t => B (F t)) (df:=fun t => dB (D t) (F t)); auto.
+      intros. eapply H3. 2: apply H6. apply H2. apply H6. }
+    pose proof (exp_pos (lambda * t)). psatz R.
+  Qed.
 
 End ODE.
