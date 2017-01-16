@@ -205,13 +205,12 @@ Section ODE.
   Qed.
 
   Definition solution_sampled_data (f : state -> state -> state -> Prop) (u : state -> state)
-             (F : trajectory) (T : R) : Prop :=
+             (F : trajectory) (T : R) (sample : R -> R) : Prop :=
     exists (D : R -> state),
     (forall (t : R),
         is_derive F t (D t)) /\
-    exists (sample : R -> R),
-      (forall x, 0 <= x - sample x <= T) /\
-      forall t : R, f (D t) (F t) (u (F (sample t))).
+    (forall t, 0 <= t - sample t <= T) /\
+    forall t : R, f (D t) (F t) (u (F (sample t))).
 
   Theorem barrier_exp_condition_sampled :
     forall (B : barrier) (dB : state -> state -> R),
@@ -219,19 +218,20 @@ Section ODE.
       (forall t x' x,
           continuous (fun t : R => dB (x' t) (x t)) t) ->
       forall (f : state -> state -> state -> Prop) (F : trajectory)
-             (u : state -> state) (lambda T : R) (rel : state -> state -> Prop),
-        solution_sampled_data f u F T ->
-        (forall a b, 0 <= b - a <= T -> rel (F a) (F b)) ->
+             (u : state -> state) (lambda T : R) (sample : R -> R)
+             (rel : state -> state -> Prop),
+        solution_sampled_data f u F T sample ->
+        (forall t, rel (F (sample t)) (F t)) ->
         (forall (x' x xb : state),
               rel xb x -> f x' x (u xb) -> dB x' x <= lambda * B x) ->
           forall (t : R),
             0 <= t -> B (F 0) <= 0 -> B (F t) <= 0.
   Proof.
-    intros. unfold solution_sampled_data in *. destruct H1 as [D [? [sample ?]]].
+    intros. unfold solution_sampled_data in *. destruct H1 as [D [? ?]].
     assert (B (F t) <= B (F 0) * exp (lambda * t)).
     { apply exp_integral
       with (f:=fun t => B (F t)) (df:=fun t => dB (D t) (F t)); auto.
-      intros. eapply H3. 2: apply H6. apply H2. apply H6. }
+      intros. eapply H3. 2: apply H6. apply H2. }
     pose proof (exp_pos (lambda * t)). psatz R.
   Qed.
 
