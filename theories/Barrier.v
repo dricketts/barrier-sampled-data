@@ -19,8 +19,7 @@ Section ODE.
 
   (* States that F is a solution to the ODI f with initial value x0. *)
   (* TODO: restate in terms of cauchy. *)
-  Definition solution (f : ODI) (x0 : state) (F : trajectory) : Prop :=
-    F 0 = x0 /\
+  Definition solution (f : ODI) (F : trajectory) : Prop :=
     exists (D : R -> state),
     forall (t : R),
       is_derive F t (D t) /\
@@ -36,12 +35,12 @@ Section ODE.
 
   (* If a system of ODEs has a solution, then that solution is continuous. *)
   Lemma solution_continuous :
-    forall f x0 F,
-      solution f x0 F ->
+    forall f F,
+      solution f F ->
       forall t, continuous F t.
   Proof.
     intros. apply ex_derive_continuous. unfold solution in *.
-    unfold ex_derive. destruct H. destruct H0. specialize (H0 t).
+    unfold ex_derive. destruct H. specialize (H t).
     exists (x t). tauto.
   Qed.
 
@@ -179,54 +178,65 @@ Section ODE.
       { apply exp_pos. } }
   Qed.
 
+  Definition trajectory_invariant (F : trajectory) (P : state -> Prop) :=
+    P (F 0) -> forall (t : R), 0 <= t -> P (F t).
+
   Theorem barrier_exp_condition :
     forall (B : barrier) (dB : state -> state -> R),
       derive_barrier B dB ->
       (forall t x' x,
           continuous (fun t : R => dB (x' t) (x t)) t) ->
-      forall (f : ODI) (x0 : state),
-        B x0 <= 0 ->
+      forall (f : ODI),
         (exists a : R, forall (x' x : state) t,
               f x' x t -> dB x' x <= a * B x) ->
         forall (F : trajectory),
-          solution f x0 F ->
-          forall (t : R),
-            0 <= t -> B (F t) <= 0.
+          solution f F ->
+          trajectory_invariant F (fun st => B st <= 0).
   Proof.
-    intros. destruct H2 as [a H2]. destruct H3. destruct H5.
+    unfold trajectory_invariant.
+    intros. destruct H1 as [a H1]. destruct H2.
     assert (B (F t) <= B (F 0) * exp (a * t)).
     { apply exp_integral
-      with (f:=fun t => B (F t)) (df:=fun t => dB (x t) (F t)).
-      { intros. apply H0. }
-      { simpl. intros. apply H. apply H5. }
-      { intros. eapply H2. eapply H5. assumption. }
-      { assumption. } }
+      with (f:=fun t => B (F t)) (df:=fun t => dB (x t) (F t)); auto.
+      { intros. apply H. apply H2. }
+      { intros. eapply H1. apply H2. assumption. } }
     pose proof (exp_pos (a * t)). subst. psatz R.
   Qed.
 
-  Definition solution_sampled_data (f : state -> state -> state -> Prop) (u : state -> state)
-             (F : trajectory) (T : R) (sample : R -> R) : Prop :=
+  Definition solution_sampled_data (f : state -> state -> state -> Prop)
+             (F : trajectory) (sample : R -> R) : Prop :=
     exists (D : R -> state),
     (forall (t : R),
         is_derive F t (D t)) /\
-    (forall t, 0 <= t - sample t <= T) /\
-    forall t : R, f (D t) (F t) (u (F (sample t))).
+    (forall t, 0 <= t - sample t) /\
+    forall t : R, f (D t) (F t) (F (sample t)).
+
+  Definition intersample_relation_valid (rel : state -> state -> Prop)
+             (sample : R -> R) (F : trajectory) :=
+    forall t, rel (F (sample t)) (F t).
+
+  Definition exp_condition (B : barrier) (dB : state -> state -> R)
+             (rel : state -> state -> Prop) (f : state -> state -> state -> Prop)
+             (lambda : R) :=
+    forall (x' x xb : state),
+      rel xb x -> f x' x xb -> dB x' x <= lambda * B x.
+
+  Definition continuous_dB (dB : state -> state -> R) :=
+    forall t x' x,
+      continuous (fun t : R => dB (x' t) (x t)) t.
 
   Theorem barrier_exp_condition_sampled :
     forall (B : barrier) (dB : state -> state -> R),
       derive_barrier B dB ->
-      (forall t x' x,
-          continuous (fun t : R => dB (x' t) (x t)) t) ->
+      continuous_dB dB ->
       forall (f : state -> state -> state -> Prop) (F : trajectory)
-             (u : state -> state) (lambda T : R) (sample : R -> R)
-             (rel : state -> state -> Prop),
-        solution_sampled_data f u F T sample ->
-        (forall t, rel (F (sample t)) (F t)) ->
-        (forall (x' x xb : state),
-              rel xb x -> f x' x (u xb) -> dB x' x <= lambda * B x) ->
-          forall (t : R),
-            0 <= t -> B (F 0) <= 0 -> B (F t) <= 0.
+             (lambda : R) (sample : R -> R) (rel : state -> state -> Prop),
+        solution_sampled_data f F sample ->
+        intersample_relation_valid rel sample F ->
+        exp_condition B dB rel f lambda ->
+        trajectory_invariant F (fun st => B st <= 0).
   Proof.
+    unfold trajectory_invariant, intersample_relation_valid.
     intros. unfold solution_sampled_data in *. destruct H1 as [D [? ?]].
     assert (B (F t) <= B (F 0) * exp (lambda * t)).
     { apply exp_integral
@@ -235,4 +245,14 @@ Section ODE.
     pose proof (exp_pos (lambda * t)). psatz R.
   Qed.
 
+  Definition bounded_samples (sample : R -> R) (T : R) :=
+    forall t, 0 <= t - sample t <= T.
+
 End ODE.
+
+Arguments derive_barrier [_] _ _.
+Arguments solution_sampled_data [_] _ _ _.
+Arguments trajectory_invariant [_] _ _.
+Arguments intersample_relation_valid [_] _ _ _.
+Arguments exp_condition [_] _ _ _ _ _.
+Arguments continuous_dB [_] _.
