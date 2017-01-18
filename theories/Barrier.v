@@ -41,14 +41,14 @@ Section ODE.
   Definition barrier : Type := StateVal R.
   Definition dbarrier : Type := FlowVal R.
 
+  Definition StateProp := StateVal Prop.
+
   Definition derive_barrier_dom
-             (dom : StateVal Prop) (B : barrier) (dB : dbarrier) : Prop :=
+             (dom : StateProp) (B : barrier) (dB : dbarrier) : Prop :=
     forall (F : trajectory) (D : R -> state),
       (forall t, continuous F t) ->
       (forall t, is_derive F t (D t)) ->
       (forall t, dom (F t) -> is_derive (fun t => B (F t)) t (dB (D t) (F t))).
-
-  Definition StateProp := StateVal Prop.
 
   (* StateProp is an ILogic *)
   Global Instance ILogicOps_StateProp : ILogicOps StateProp :=

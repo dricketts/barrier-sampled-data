@@ -1,6 +1,7 @@
 Require Import Coq.Reals.Reals.
 Require Import Coquelicot.Coquelicot.
 Require Import Coq.micromega.Psatz.
+Require Import Coq.Classes.Morphisms.
 Require Import ChargeCore.Logics.ILogic.
 Require Import Control.Barrier.
 Require Import Control.Syntax.
@@ -9,6 +10,22 @@ Local Transparent ILInsts.ILFun_Ops.
 Section BarrierRules.
 
   Variable state : NormedModule R_AbsRing.
+
+  Lemma Proper_derive_barrier_dom :
+    forall (G1 G2 : StateProp state) (e1 e2 : barrier state) (e1' e2' : dbarrier state),
+      G1 -|- G2 ->
+      |-- e1 [=] e2 ->
+      derive_barrier_dom G1 e1 e1' ->
+      $[G1] |-- e1' [=] e2' ->
+      derive_barrier_dom G2 e2 e2'.
+  Proof.
+    unfold derive_barrier_dom. simpl. intros.
+    apply is_derive_ext with (f:=fun t => e1 (F t)).
+    { intros. auto. }
+    { rewrite <- H2; auto.
+      { apply H1; auto; apply H; auto. }
+      { apply H; auto. } }
+  Qed.
 
   Lemma derive_barrier_pure :
     forall (x : R) (G : StateProp state),
@@ -140,5 +157,45 @@ Section BarrierRules.
            (dg:=fun t => e2' (D t) (F t)); auto.
     intros. apply continuous_comp; auto.
   Qed.
+
+  Lemma piecewise_continuous :
+    forall (T : NormedModule R_AbsRing) (f g : R -> T) (a : R) (k : R -> R),
+    (forall x, k x <= a -> continuous f x) ->
+    (forall x, k x >= a -> continuous g x) ->
+    (forall x, k x = a -> f x = g x) ->
+    (forall x, continuous k x) ->
+    forall x, continuous (piecewise f g a k) x.
+  Proof.
+    intros.
+    destruct (Rle_dec (k x0) a).
+    { destruct r.
+      { apply (continuous_ext_loc _ f).
+        { apply locally_open with (D:= fun x => k x < a); auto.
+          { apply (open_comp k (fun x => x < a)).
+            { simpl. intros. apply H2. }
+            { apply open_lt. } }
+          { simpl. intros. unfold piecewise.
+            destruct (Rle_dec (k x1) a); try psatzl R. reflexivity. } }
+        { apply H. psatzl R. } }
+      { apply filterlim_locally. intros.
+        specialize (H _ (or_intror H3)). specialize (H0 _ (or_intror H3)).
+        pose proof (proj1 (filterlim_locally _ _) H eps) as Cf.
+        pose proof (proj1 (filterlim_locally _ _) H0 eps) as Cg.
+        pose proof (filter_and _ _ Cf Cg).
+        eapply filter_imp; eauto; simpl. intros. unfold piecewise.
+        destruct (Rle_dec (k x0) a); try psatzl R. destruct (Rle_dec (k x1) a).
+        { tauto. }
+        { rewrite H1; tauto. } } }
+    { apply (continuous_ext_loc _ g).
+      { apply locally_open with (D:= fun x => k x > a); auto.
+        { apply (open_comp k (fun x => x > a)).
+          { simpl. intros. apply H2. }
+          { apply open_gt. } }
+        { simpl. intros. unfold piecewise.
+          destruct (Rle_dec (k x1) a); try psatzl R. reflexivity. }
+        { psatzl R. } }
+      { apply H0; psatzl R. } }
+  Qed.
+
 
 End BarrierRules.
