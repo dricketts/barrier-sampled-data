@@ -18,7 +18,6 @@ Section ODE.
   Definition trajectory : Type := R -> state.
 
   (* States that F is a solution to the ODI f with initial value x0. *)
-  (* TODO: restate in terms of cauchy. *)
   Definition solution (f : ODI) (F : trajectory) : Prop :=
     exists (D : R -> state),
     forall (t : R),
@@ -30,6 +29,7 @@ Section ODE.
 
   Definition derive_barrier (B : barrier) (dB : state -> state -> R) : Prop :=
     forall (F : trajectory) (D : R -> state) (t : R),
+      (forall t, continuous F t) ->
       is_derive F t (D t) ->
       is_derive (fun t => B (F t)) t (dB (D t) (F t)).
 
@@ -198,7 +198,9 @@ Section ODE.
     assert (B (F t) <= B (F 0) * exp (a * t)).
     { apply exp_integral
       with (f:=fun t => B (F t)) (df:=fun t => dB (x t) (F t)); auto.
-      { intros. apply H. apply H2. }
+      { intros. apply H.
+        { eapply solution_continuous. unfold solution. eexists. apply H2. }
+        { apply H2. } }
       { intros. eapply H1. apply H2. assumption. } }
     pose proof (exp_pos (a * t)). subst. psatz R.
   Qed.
@@ -210,6 +212,17 @@ Section ODE.
         is_derive F t (D t)) /\
     (forall t, 0 <= t - sample t) /\
     forall t : R, f (D t) (F t) (F (sample t)).
+
+  (* If a sampled data system of ODEs has a solution, then that solution is continuous. *)
+  Lemma sampled_solution_continuous :
+    forall f F sample,
+      solution_sampled_data f F sample ->
+      forall t, continuous F t.
+  Proof.
+    intros. apply ex_derive_continuous. unfold solution_sampled_data in *.
+    unfold ex_derive. destruct H. exists (x t). apply H.
+  Qed.
+
 
   Definition intersample_relation_valid (rel : state -> state -> Prop)
              (sample : R -> R) (F : trajectory) :=
@@ -237,11 +250,14 @@ Section ODE.
         trajectory_invariant F (fun st => B st <= 0).
   Proof.
     unfold trajectory_invariant, intersample_relation_valid.
-    intros. unfold solution_sampled_data in *. destruct H1 as [D [? ?]].
+    intros. pose proof H1 as Hsol.
+    unfold solution_sampled_data in *. destruct H1 as [D [? ?]].
     assert (B (F t) <= B (F 0) * exp (lambda * t)).
     { apply exp_integral
       with (f:=fun t => B (F t)) (df:=fun t => dB (D t) (F t)); auto.
-      intros. eapply H3. 2: apply H6. apply H2. }
+      { intros. apply H; auto. intros.
+        eapply sampled_solution_continuous; eauto. }
+      { intros. eapply H3. 2: apply H6. apply H2. } }
     pose proof (exp_pos (lambda * t)). psatz R.
   Qed.
 
