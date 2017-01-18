@@ -4,6 +4,9 @@ Require Import Coq.micromega.Psatz.
 Require Import Coq.Logic.Classical_Prop.
 Require Import Coq.Logic.FunctionalExtensionality.
 Require Import ExtLib.Structures.Applicative.
+Require Import ChargeCore.Logics.ILogic.
+Require Import ChargeCore.Logics.ILogicIso.
+Require ChargeCore.Logics.ILInsts.
 
 Section ODE.
 
@@ -38,11 +41,21 @@ Section ODE.
   Definition barrier : Type := StateVal R.
   Definition dbarrier : Type := FlowVal R.
 
-  Definition derive_barrier (B : barrier) (dB : dbarrier) : Prop :=
-    forall (F : trajectory) (D : R -> state) (t : R),
+  Definition derive_barrier_dom
+             (dom : StateVal Prop) (B : barrier) (dB : dbarrier) : Prop :=
+    forall (F : trajectory) (D : R -> state),
       (forall t, continuous F t) ->
-      is_derive F t (D t) ->
-      is_derive (fun t => B (F t)) t (dB (D t) (F t)).
+      (forall t, is_derive F t (D t)) ->
+      (forall t, dom (F t) -> is_derive (fun t => B (F t)) t (dB (D t) (F t))).
+
+  Definition StateProp := StateVal Prop.
+
+  (* StateProp is an ILogic *)
+  Global Instance ILogicOps_StateProp : ILogicOps StateProp :=
+    ILogicOps_iso _ _.
+  Global Instance ILogic_StateProp : ILogic StateProp := _.
+
+  Definition derive_barrier := derive_barrier_dom (fun _ => True).
 
   (* If a system of ODEs has a solution, then that solution is continuous. *)
   Lemma solution_continuous :
@@ -209,7 +222,7 @@ Section ODE.
     assert (B (F t) <= B (F 0) * exp (a * t)).
     { apply exp_integral
       with (f:=fun t => B (F t)) (df:=fun t => dB (x t) (F t)); auto.
-      { intros. apply H.
+      { intros. apply H; auto.
         { eapply solution_continuous. unfold solution. eexists. apply H2. }
         { apply H2. } }
       { intros. eapply H1. apply H2. assumption. } }
@@ -277,6 +290,7 @@ Section ODE.
 End ODE.
 
 Arguments derive_barrier [_] _ _.
+Arguments derive_barrier_dom [_] _ _ _.
 Arguments solution_sampled_data [_] _ _ _.
 Arguments trajectory_invariant [_] _ _.
 Arguments intersample_relation_valid [_] _ _ _.

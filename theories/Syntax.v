@@ -22,10 +22,14 @@ Arguments liftA2 [_ _ _ _ _] _ _ _.
 Notation "a [+] b" := (liftA2 Rplus a b) (at level 50, left associativity).
 Notation "a [-] b" := (liftA2 Rminus a b) (at level 50, left associativity).
 Notation "a [*] b" := (liftA2 Rmult a b) (at level 40, left associativity).
+Notation "a [^] n" := (liftA2 pow a n) (at level 40, left associativity).
 Notation "a [/] b" := (liftA2 Rdiv a b) (at level 40, left associativity).
 Notation "a [>=] b" := (liftA2 Rge a b) (at level 70, right associativity).
 Notation "a [<=] b" := (liftA2 Rle a b) (at level 70, right associativity).
+Notation "a [>] b" := (liftA2 Rgt a b) (at level 70, right associativity).
+Notation "a [<] b" := (liftA2 Rlt a b) (at level 70, right associativity).
 Notation "a [=] b" := (liftA2 (@eq R) a b) (at level 70, right associativity).
+Notation "a [<>] b" := (liftA1 not (liftA2 (@eq R) a b)) (at level 70, right associativity).
 Notation "[sqrt] e" := (liftA1 sqrt e) (at level 30, right associativity).
 Notation "# x" := (pure x) (at level 20, right associativity).
 Notation "c ?<= x [?] e1 [:] e2" :=
@@ -37,14 +41,23 @@ Notation "a [[-]] b" :=
   (@liftA2 _ (Applicative_FlowVal _) _ _ _ Rminus a b) (at level 50, left associativity).
 Notation "a [[*]] b" :=
   (@liftA2 _ (Applicative_FlowVal _) _ _ _ Rmult a b) (at level 40, left associativity).
+Notation "a [[^]] n" :=
+  (@liftA2 _ (Applicative_FlowVal _) _ _ _ pow a n) (at level 40, left associativity).
 Notation "a [[/]] b" :=
   (@liftA2 _ (Applicative_FlowVal _) _ _ _ Rdiv a b) (at level 40, left associativity).
 Notation "a [[>=]] b" :=
   (@liftA2 _ (Applicative_FlowVal _) _ _ _ Rge a b) (at level 70, right associativity).
 Notation "a [[<=]] b" :=
   (@liftA2 _ (Applicative_FlowVal _) _ _ _ Rle a b) (at level 70, right associativity).
+Notation "a [[>]] b" :=
+  (@liftA2 _ (Applicative_FlowVal _) _ _ _ Rgt a b) (at level 70, right associativity).
+Notation "a [[<]] b" :=
+  (@liftA2 _ (Applicative_FlowVal _) _ _ _ Rlt a b) (at level 70, right associativity).
 Notation "a [[=]] b" :=
   (@liftA2 _ (Applicative_FlowVal _) _ _ _ (@eq R) a b) (at level 70, right associativity).
+Notation "a [[<>]] b" :=
+  (@liftA1 _ _ _ (Applicative_FlowVal _) not (@liftA2 _ (Applicative_FlowVal _) _ _ _ (@eq R) a b))
+    (at level 70, right associativity).
 Notation "[[sqrt]] e" :=
   (@liftA1 _ _ _ (Applicative_FlowVal _) sqrt e) (at level 30, right associativity).
 Notation "## x" := (@pure _ (Applicative_FlowVal _) _ x) (at level 20, right associativity).

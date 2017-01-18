@@ -34,53 +34,6 @@ Section DblInt.
   Definition ODE (st' st smpl : state) : Prop :=
     x st' = v st /\ v st' = u smpl.
 
-  (* TODO: move *)
-  Definition piecewise {T : Type} (f g : R -> T) (a : R) (k : R -> R) (x : R) :=
-    if Rle_dec (k x) a then f x else g x.
-
-  (* TODO: move *)
-  Lemma piecewise_is_derive :
-    forall (T : NormedModule R_AbsRing) (f g df dg : R -> T) (a : R) (k : R -> R),
-    (forall x, k x <= a -> is_derive f x (df x)) ->
-    (forall x, k x >= a -> is_derive g x (dg x)) ->
-    (forall x, k x = a -> df x = dg x) ->
-    (forall x, k x = a -> f x = g x) ->
-    (forall x, continuous k x) ->
-    forall x, is_derive (piecewise f g a k) x (piecewise df dg a k x).
-  Proof.
-    intros.
-    destruct (Rle_dec (k x0) a).
-    { destruct r.
-      { apply (is_derive_ext_loc f).
-        { apply locally_open with (D:= fun x => k x < a); auto.
-          { apply (open_comp k (fun x => x < a)).
-            { simpl. intros. apply H3. }
-            { apply open_lt. } }
-          { simpl. intros. unfold piecewise.
-            destruct (Rle_dec (k x1) a); try psatzl R. reflexivity. } }
-        { unfold piecewise. destruct (Rle_dec (k x0) a); try psatzl R.
-          apply H. assumption. } }
-      { split.
-        { apply is_linear_scal_l. }
-        { intros x Hx eps. pose proof (is_filter_lim_locally_unique _ _ Hx).
-          simpl. subst x0. specialize (H x (or_intror H4)). specialize (H0 x (or_intror H4)).
-          destruct H as [? Cf]. destruct H0 as [? Cg].
-          specialize (Cf _ Hx eps). specialize (Cg _ Hx eps). pose proof (filter_and _ _ Cf Cg).
-          eapply filter_imp; eauto. simpl. intros. unfold piecewise.
-          destruct (Rle_dec (k x) a); try psatzl R. destruct (Rle_dec (k x0) a).
-          { tauto. }
-          { rewrite H1; auto; rewrite H2; tauto. } } } }
-    { apply (is_derive_ext_loc g).
-      { apply locally_open with (D:= fun x => k x > a); try psatzl R.
-        { apply (open_comp k (fun x => x > a)).
-          { simpl. intros. apply H3. }
-          { apply open_gt. } }
-        { simpl. intros. unfold piecewise.
-          destruct (Rle_dec (k x1) a); try psatzl R. reflexivity. } }
-      { unfold piecewise. destruct (Rle_dec (k x0) a); try psatzl R.
-        apply H0. psatzl R. } }
-  Qed.
-
   (* The primary barrier function for this system. *)
   (*     v - sqrt (-2*umax*(x + umax/(2*gamma^2))) *)
   Definition Barrier_sqrt : barrier state :=
