@@ -3,6 +3,7 @@ Require Import Coquelicot.Coquelicot.
 Require Import Coq.micromega.Psatz.
 Require Import Coq.Logic.Classical_Prop.
 Require Import Coq.Logic.FunctionalExtensionality.
+Require Import ExtLib.Structures.Applicative.
 
 Section ODE.
 
@@ -24,10 +25,20 @@ Section ODE.
       is_derive F t (D t) /\
       (0 <= t -> f (D t) (F t) t).
 
-  (* A barrier function maps states to scalars. *)
-  Definition barrier : Type := state -> R.
+  Definition StateVal (T : Type) := state -> T.
+  Definition FlowVal (T : Type) := state -> state -> T.
+  Global Instance Applicative_StateVal : Applicative StateVal :=
+    { pure := fun _ x => (fun _ => x)
+      ; ap   := fun _ _ f x => (fun st => f st (x st)) }.
+  Global Instance Applicative_FlowVal : Applicative FlowVal :=
+    { pure := fun _ x => (fun _ _ => x)
+      ; ap   := fun _ _ f x => (fun st st' => f st st' (x st st')) }.
 
-  Definition derive_barrier (B : barrier) (dB : state -> state -> R) : Prop :=
+  (* A barrier function maps states to scalars. *)
+  Definition barrier : Type := StateVal R.
+  Definition dbarrier : Type := FlowVal R.
+
+  Definition derive_barrier (B : barrier) (dB : dbarrier) : Prop :=
     forall (F : trajectory) (D : R -> state) (t : R),
       (forall t, continuous F t) ->
       is_derive F t (D t) ->
@@ -182,7 +193,7 @@ Section ODE.
     P (F 0) -> forall (t : R), 0 <= t -> P (F t).
 
   Theorem barrier_exp_condition :
-    forall (B : barrier) (dB : state -> state -> R),
+    forall (B : barrier) (dB : dbarrier),
       derive_barrier B dB ->
       (forall t x' x,
           continuous (fun t : R => dB (x' t) (x t)) t) ->
@@ -223,23 +234,22 @@ Section ODE.
     unfold ex_derive. destruct H. exists (x t). apply H.
   Qed.
 
-
   Definition intersample_relation_valid (rel : state -> state -> Prop)
              (sample : R -> R) (F : trajectory) :=
     forall t, rel (F (sample t)) (F t).
 
-  Definition exp_condition (B : barrier) (dB : state -> state -> R)
+  Definition exp_condition (B : barrier) (dB : dbarrier)
              (rel : state -> state -> Prop) (f : state -> state -> state -> Prop)
              (lambda : R) :=
     forall (x' x xb : state),
       rel xb x -> f x' x xb -> dB x' x <= lambda * B x.
 
-  Definition continuous_dB (dB : state -> state -> R) :=
+  Definition continuous_dB (dB : dbarrier) :=
     forall t x' x,
       continuous (fun t : R => dB (x' t) (x t)) t.
 
   Theorem barrier_exp_condition_sampled :
-    forall (B : barrier) (dB : state -> state -> R),
+    forall (B : barrier) (dB : dbarrier),
       derive_barrier B dB ->
       continuous_dB dB ->
       forall (f : state -> state -> state -> Prop) (F : trajectory)

@@ -2,12 +2,15 @@ Require Import Coq.Reals.Reals.
 Require Import Coquelicot.Coquelicot.
 Require Import Coq.micromega.Psatz.
 Require Import Control.Barrier.
+Require Import Control.Syntax.
 
 Section DblInt.
 
   (* The state of the system, position and velocity. *)
   (* Represented as a pair because Coquelicot has a NormedModule instance for pairs. *)
-  Definition state : Type := R * R.
+  Definition stateT : Type := R * R.
+  Canonical state : NormedModule R_AbsRing :=
+    prod_NormedModule R_AbsRing R_NormedModule R_NormedModule.
   Definition x : state -> R := fst.
   Definition v : state -> R := snd.
 
@@ -79,29 +82,26 @@ Section DblInt.
   Qed.
 
   (* The primary barrier function for this system. *)
-  Definition Barrier_sqrt (x v : R) : R :=
-    v - sqrt (-2*umax*(x + umax/(2*gamma^2))).
-  Definition Barrier_lin (x v : R) : R :=
-    v + gamma*x.
-  Definition Barrier_cond (x : R) :=
-    Rle_dec x (-umax / gamma^2).
-  Definition Barrier_aux (x v : R) : R :=
-    if Barrier_cond x
-    then Barrier_sqrt x v
-    else Barrier_lin x v.
-  Definition Barrier (st : state) : R :=
-    Barrier_aux (x st) (v st).
+  (*     v - sqrt (-2*umax*(x + umax/(2*gamma^2))) *)
+  Definition Barrier_sqrt : barrier state :=
+    v [-] [sqrt](#(-2)[*]#umax[*](x [+] #umax[/](#(-2)[*]#gamma[*]#gamma))).
+  (* v + gamma*x *)
+  Definition Barrier_lin : barrier state :=
+    v [+] (#gamma[*]x).
+  Definition Barrier : barrier state :=
+    x ?<= -umax/gamma^2 [?] Barrier_sqrt [:] Barrier_lin.
+
   (* Derivative of the barrier function. *)
-  Definition dBarrier_sqrt (x' v' x : R) : R :=
-    v' + umax*x'/sqrt (-2*umax*(x + umax/(2*gamma^2))).
-  Definition dBarrier_lin (x' v' : R) : R :=
-    v' + gamma*x'.
-  Definition dBarrier_aux (x' v' x v : R) : R :=
-    if Barrier_cond x
-    then dBarrier_sqrt x' v' x
-    else dBarrier_lin x' v'.
-  Definition dBarrier (st' st : state) : R :=
-    dBarrier_aux (x st') (v st') (x st) (v st).
+  (* v' + umax*x'/sqrt (-2*umax*(x + umax/(2*gamma^2))) *)
+  Definition dBarrier_sqrt : dbarrier state :=
+    d[v] [[+]]
+    ##umax[*] d[x] [[/]]
+    ([[sqrt]] (##(-2)[[*]]##umax[[*]]($[x] [[+]] ##umax[[/]](##2[[*]]##gamma[[*]]##gamma)))).
+  (* v' + gamma*x' *)
+  Definition dBarrier_lin : dbarrier state :=
+    d[v] [[+]] (##gamma[*] d[x]).
+  Definition dBarrier : dbarrier state :=
+    $[x] ??<= -umax/gamma^2 [?] dBarrier_sqrt [:] dBarrier_lin.
 
 (*
   Lemma is_derive_var_fst :
@@ -151,6 +151,29 @@ Section DblInt.
         { psatzl R. } }
       { apply H0; psatzl R. } }
   Qed.
+
+  (* The barrier function derivative is correct. *)
+  Lemma dBarrier_valid :
+      derive_barrier Barrier dBarrier.
+  Proof.
+    unfold derive_barrier, Barrier, Barrier_aux, dBarrier, dBarrier_aux.
+    simpl. intros.
+    apply piecewise_is_derive
+    with (k:=fun t => x (F t))
+           (f:=fun t => Barrier_sqrt (x (F t)) (v (F t)))
+           (g:=fun t => Barrier_lin (x (F t)) (v (F t)))
+           (df:=fun t0 => dBarrier_sqrt (x (D t)) (v (D t)) (x (F t0)))
+           (dg:=fun _ => dBarrier_lin (x (D t)) (v (D t))).
+    { intros. unfold Barrier_sqrt, dBarrier_sqrt.
+    { intros. unfold Barrier_lin, dBarrier_lin.
+      apply is_derive_plus with (f:=fun t => v (F t)) (g:=fun t => gamma*x (F t)).
+      { admit. }
+      { apply is_derive_scal. admit. } }
+    { intros. unfold dBarrier_sqrt, dBarrier_lin. rewrite H1. admit. }
+    { intros. unfold Barrier_sqrt, Barrier_lin. rewrite H1. admit. }
+    { intros. apply continuous_comp; auto. apply continuous_fst. }
+  Admitted.
+
 
   (* The barrier function derivative is correct. *)
   Lemma dBarrier_valid :
