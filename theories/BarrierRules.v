@@ -93,7 +93,7 @@ Section BarrierRules.
     apply H0; auto.
   Qed.
 
-  Definition piecewise {T : Type} (f g : R -> T) (a : R) (k : R -> R) (x : R) :=
+  Definition piecewise {T U : Type} (f g : U -> T) (a : R) (k : U -> R) (x : U) :=
     if Rle_dec (k x) a then f x else g x.
 
   Lemma piecewise_is_derive :
@@ -158,8 +158,83 @@ Section BarrierRules.
     intros. apply continuous_comp; auto.
   Qed.
 
+  Lemma continuous_dB_pure :
+    forall (x : R) (G : FlowProp state),
+      continuous_dB G (pure x).
+  Proof.
+    unfold continuous_dB, pure.
+    simpl. intros. apply continuous_const.
+  Qed.
+
+  Lemma continuous_dB_plus :
+    forall (e1 e2 : dbarrier state) (G : FlowProp state),
+      continuous_dB G e1 ->
+      continuous_dB G e2 ->
+      continuous_dB G (e1 [+] e2).
+  Proof.
+    unfold continuous_dB. simpl. intros.
+    specialize (H p H1). specialize (H0 p H1).
+    apply (continuous_plus _ _ _ H H0).
+  Qed.
+
+  Lemma continuous_dB_minus :
+    forall (e1 e2 : dbarrier state) (G : FlowProp state),
+      continuous_dB G e1 ->
+      continuous_dB G e2 ->
+      continuous_dB G (e1 [-] e2).
+  Proof.
+    unfold continuous_dB. simpl. intros.
+    specialize (H p H1). specialize (H0 p H1).
+    apply (continuous_minus _ _ _ H H0).
+  Qed.
+
+  Lemma continuous_dB_mult :
+    forall (e1 e2 : dbarrier state) (G : FlowProp state),
+      continuous_dB G e1 ->
+      continuous_dB G e2 ->
+      continuous_dB G (e1 [*] e2).
+  Proof.
+    unfold continuous_dB. simpl. intros.
+    specialize (H p H1). specialize (H0 p H1).
+    apply (continuous_mult _ _ _ H H0).
+  Qed.
+
+  Lemma continuous_dB_div :
+    forall (e1 e2 : dbarrier state) (G : FlowProp state),
+      continuous_dB G e1 ->
+      continuous_dB G e2 ->
+      G |-- e2 [<>] #0 ->
+      continuous_dB G (e1 [/] e2).
+  Proof.
+    unfold continuous_dB. simpl. intros.
+    specialize (H p H2). specialize (H0 p H2).
+    apply (continuous_mult (fun p0 => e1 (fst p0) (snd p0))
+                           (fun p0 => / e2 (fst p0) (snd p0))); auto.
+    unfold continuous. simpl. eapply filterlim_comp.
+    { apply H0. }
+    { simpl.
+      replace (locally (e2 (fst p) (snd p)))
+      with (Rbar_locally (e2 (fst p) (snd p))) by reflexivity.
+      replace (@locally (AbsRing_UniformSpace R_AbsRing) (/ e2 (fst p) (snd p)))
+              with (Rbar_locally (/ e2 (fst p) (snd p))) by reflexivity.
+      apply filterlim_Rbar_inv. apply Rbar_finite_neq. auto. }
+  Qed.
+
+  Lemma continuous_dB_sqrt :
+    forall (e : dbarrier state) (G : FlowProp state),
+      continuous_dB G e ->
+      G |-- #0 [<] e ->
+      continuous_dB G ([sqrt] e).
+  Proof.
+    unfold continuous_dB. simpl. intros. specialize (H p H1).
+    apply continuous_comp.
+    { apply H. }
+    { apply continuity_pt_filterlim. apply continuity_pt_sqrt.
+      specialize (H0 _ _ H1). psatzl R. }
+  Qed.
+
   Lemma piecewise_continuous :
-    forall (T : NormedModule R_AbsRing) (f g : R -> T) (a : R) (k : R -> R),
+    forall (T U : UniformSpace)  (f g : U -> T) (a : R) (k : U -> R),
     (forall x, k x <= a -> continuous f x) ->
     (forall x, k x >= a -> continuous g x) ->
     (forall x, k x = a -> f x = g x) ->
@@ -167,7 +242,7 @@ Section BarrierRules.
     forall x, continuous (piecewise f g a k) x.
   Proof.
     intros.
-    destruct (Rle_dec (k x0) a).
+    destruct (Rle_dec (k x) a).
     { destruct r.
       { apply (continuous_ext_loc _ f).
         { apply locally_open with (D:= fun x => k x < a); auto.
@@ -175,7 +250,7 @@ Section BarrierRules.
             { simpl. intros. apply H2. }
             { apply open_lt. } }
           { simpl. intros. unfold piecewise.
-            destruct (Rle_dec (k x1) a); try psatzl R. reflexivity. } }
+            destruct (Rle_dec (k x0) a); try psatzl R. reflexivity. } }
         { apply H. psatzl R. } }
       { apply filterlim_locally. intros.
         specialize (H _ (or_intror H3)). specialize (H0 _ (or_intror H3)).
@@ -183,7 +258,7 @@ Section BarrierRules.
         pose proof (proj1 (filterlim_locally _ _) H0 eps) as Cg.
         pose proof (filter_and _ _ Cf Cg).
         eapply filter_imp; eauto; simpl. intros. unfold piecewise.
-        destruct (Rle_dec (k x0) a); try psatzl R. destruct (Rle_dec (k x1) a).
+        destruct (Rle_dec (k x) a); try psatzl R. destruct (Rle_dec (k x0) a).
         { tauto. }
         { rewrite H1; tauto. } } }
     { apply (continuous_ext_loc _ g).
@@ -192,10 +267,48 @@ Section BarrierRules.
           { simpl. intros. apply H2. }
           { apply open_gt. } }
         { simpl. intros. unfold piecewise.
-          destruct (Rle_dec (k x1) a); try psatzl R. reflexivity. }
+          destruct (Rle_dec (k x0) a); try psatzl R. reflexivity. }
         { psatzl R. } }
       { apply H0; psatzl R. } }
   Qed.
 
+  Lemma continuous_dB_piecewise :
+    forall (c : StateVal state R) (x : R)
+           (e1 e2 : dbarrier state) (G : FlowProp state),
+      continuous_dB ($[c] [[<=]] #x) e1 ->
+      continuous_dB ($[c] [[>=]] #x) e2 ->
+      $[c] [[=]] #x |-- e1 [[=]] e2 ->
+      (forall x : state, continuous c x) ->
+      continuous_dB G ($[c] ??<= x [?] e1 [:] e2).
+  Proof.
+    unfold continuous_dB. simpl. intros.
+    apply piecewise_continuous
+    with (k:=fun p => c (snd p))
+           (f:=fun p => e1 (fst p) (snd p))
+           (g:=fun p => e2 (fst p) (snd p)); auto.
+    intros. apply continuous_comp.
+    { apply continuous_snd. }
+    { apply H2. }
+  Qed.
 
 End BarrierRules.
+
+Ltac auto_derive_barrier :=
+  repeat match goal with
+         | [ |- derive_barrier_dom _ (#_) _ ] => apply derive_barrier_pure
+         | [ |- derive_barrier_dom _ (_ [-] _) _ ] => apply derive_barrier_minus
+         | [ |- derive_barrier_dom _ (_ [+] _) _ ] => apply derive_barrier_plus
+         | [ |- derive_barrier_dom _ (_ [/] _) _ ] => apply derive_barrier_div
+         | [ |- derive_barrier_dom _ (_ [*] _) _ ] => apply derive_barrier_mult
+         | [ |- derive_barrier_dom _ ([sqrt] _) _ ] => apply derive_barrier_sqrt
+         end.
+
+Ltac auto_continuous_dB :=
+  repeat match goal with
+         | [ |- continuous_dB _ (#_) ] => apply continuous_dB_pure
+         | [ |- continuous_dB _ (_ [-] _) ] => apply continuous_dB_minus
+         | [ |- continuous_dB _ (_ [+] _) ] => apply continuous_dB_plus
+         | [ |- continuous_dB _ (_ [/] _) ] => apply continuous_dB_div
+         | [ |- continuous_dB _ (_ [*] _) ] => apply continuous_dB_mult
+         | [ |- continuous_dB _ ([sqrt] _) ] => apply continuous_dB_sqrt
+         end.

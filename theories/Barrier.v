@@ -24,9 +24,10 @@ Section ODE.
   (* States that F is a solution to the ODI f with initial value x0. *)
   Definition solution (f : ODI) (F : trajectory) : Prop :=
     exists (D : R -> state),
-    forall (t : R),
-      is_derive F t (D t) /\
-      (0 <= t -> f (D t) (F t) t).
+      (forall x, continuous D x) /\
+      forall (t : R),
+        is_derive F t (D t) /\
+        (0 <= t -> f (D t) (F t) t).
 
   Definition StateVal (T : Type) := state -> T.
   Definition FlowVal (T : Type) := state -> state -> T.
@@ -42,6 +43,7 @@ Section ODE.
   Definition dbarrier : Type := FlowVal R.
 
   Definition StateProp := StateVal Prop.
+  Definition FlowProp := FlowVal Prop.
 
   Definition derive_barrier_dom
              (dom : StateProp) (B : barrier) (dB : dbarrier) : Prop :=
@@ -54,6 +56,9 @@ Section ODE.
   Global Instance ILogicOps_StateProp : ILogicOps StateProp :=
     ILogicOps_iso _ _.
   Global Instance ILogic_StateProp : ILogic StateProp := _.
+  Global Instance ILogicOps_FlowProp : ILogicOps FlowProp :=
+    ILogicOps_iso _ _.
+  Global Instance ILogic_FlowProp : ILogic FlowProp := _.
 
   Definition derive_barrier := derive_barrier_dom (fun _ => True).
 
@@ -64,7 +69,7 @@ Section ODE.
       forall t, continuous F t.
   Proof.
     intros. apply ex_derive_continuous. unfold solution in *.
-    unfold ex_derive. destruct H. specialize (H t).
+    unfold ex_derive. destruct H. destruct H. specialize (H0 t).
     exists (x t). tauto.
   Qed.
 
@@ -232,10 +237,11 @@ Section ODE.
   Definition solution_sampled_data (f : state -> state -> state -> Prop)
              (F : trajectory) (sample : R -> R) : Prop :=
     exists (D : R -> state),
-    (forall (t : R),
-        is_derive F t (D t)) /\
-    (forall t, 0 <= t - sample t) /\
-    forall t : R, f (D t) (F t) (F (sample t)).
+      (forall x, continuous D x) /\
+      (forall (t : R),
+          is_derive F t (D t)) /\
+      (forall t, 0 <= t - sample t) /\
+      forall t : R, f (D t) (F t) (F (sample t)).
 
   (* If a sampled data system of ODEs has a solution, then that solution is continuous. *)
   Lemma sampled_solution_continuous :
@@ -257,14 +263,16 @@ Section ODE.
     forall (x' x xb : state),
       rel xb x -> f x' x xb -> dB x' x <= lambda * B x.
 
-  Definition continuous_dB (dB : dbarrier) :=
-    forall t x' x,
-      continuous (fun t : R => dB (x' t) (x t)) t.
+  Definition continuous_dB (G : FlowProp) (dB : dbarrier) :=
+    forall (p : state * state),
+      G (fst p) (snd p) -> continuous (fun p => dB (fst p) (snd p)) p.
+
+  Local Transparent ILInsts.ILFun_Ops.
 
   Theorem barrier_exp_condition_sampled :
     forall (B : barrier) (dB : dbarrier),
       derive_barrier B dB ->
-      continuous_dB dB ->
+      continuous_dB ltrue dB ->
       forall (f : state -> state -> state -> Prop) (F : trajectory)
              (lambda : R) (sample : R -> R) (rel : state -> state -> Prop),
         solution_sampled_data f F sample ->
@@ -278,8 +286,14 @@ Section ODE.
     assert (B (F t) <= B (F 0) * exp (lambda * t)).
     { apply exp_integral
       with (f:=fun t => B (F t)) (df:=fun t => dB (D t) (F t)); auto.
+      { intros. eapply continuous_comp_2 in H0.
+        { apply H0. }
+        { auto. }
+        { eapply sampled_solution_continuous; eauto. }
+        { exact I. } }
       { intros. apply H; auto. intros.
-        eapply sampled_solution_continuous; eauto. }
+        { eapply sampled_solution_continuous; eauto. }
+        { apply H6. } }
       { intros. eapply H3. 2: apply H6. apply H2. } }
     pose proof (exp_pos (lambda * t)). psatz R.
   Qed.
@@ -295,4 +309,4 @@ Arguments solution_sampled_data [_] _ _ _.
 Arguments trajectory_invariant [_] _ _.
 Arguments intersample_relation_valid [_] _ _ _.
 Arguments exp_condition [_] _ _ _ _ _.
-Arguments continuous_dB [_] _.
+Arguments continuous_dB [_] _ _.

@@ -115,17 +115,6 @@ Section DblInt.
     { simpl. intros. reflexivity. }
   Qed.
 
-
-Ltac auto_derive_barrier :=
-  repeat match goal with
-         | [ |- derive_barrier_dom _ (#_) _ ] => apply derive_barrier_pure
-         | [ |- derive_barrier_dom _ (_ [-] _) _ ] => apply derive_barrier_minus
-         | [ |- derive_barrier_dom _ (_ [+] _) _ ] => apply derive_barrier_plus
-         | [ |- derive_barrier_dom _ (_ [/] _) _ ] => apply derive_barrier_div
-         | [ |- derive_barrier_dom _ (_ [*] _) _ ] => apply derive_barrier_mult
-         | [ |- derive_barrier_dom _ ([sqrt] _) _ ] => apply derive_barrier_sqrt
-         end.
-
 Ltac breakAbstraction :=
   cbv beta iota delta - [Rle Rge abs Rabs].
 
@@ -162,12 +151,62 @@ Ltac rewrite_R0 :=
     { admit. }
   Admitted.
 
+  Lemma continuous_dB_x :
+    forall G,
+      continuous_dB G ($[x]).
+  Proof.
+    unfold continuous_dB. simpl. intros.
+    apply continuous_comp.
+    { apply continuous_snd. }
+    { apply continuous_fst. }
+  Qed.
+  Lemma continuous_dB_v :
+    forall G,
+      continuous_dB G ($[v]).
+  Proof.
+    unfold continuous_dB. simpl. intros.
+    apply continuous_comp.
+    { apply continuous_snd. }
+    { apply continuous_snd. }
+  Qed.
+  Lemma continuous_dB_dx :
+    forall G,
+      continuous_dB G (d[x]).
+  Proof.
+    unfold continuous_dB. simpl. intros.
+    apply continuous_comp.
+    { apply continuous_fst. }
+    { apply continuous_fst. }
+  Qed.
+  Lemma continuous_dB_dv :
+    forall G,
+      continuous_dB G (d[v]).
+  Proof.
+    unfold continuous_dB. simpl. intros.
+    apply continuous_comp.
+    { apply continuous_fst. }
+    { apply continuous_snd. }
+  Qed.
+
+  Ltac continuous_dB_vars :=
+    apply continuous_dB_x ||
+    apply continuous_dB_dx ||
+    apply continuous_dB_v ||
+    apply continuous_dB_dv.
+
   (* The derivative of the barrier function is continuous. *)
   Lemma continuous_dBarrier :
-    continuous_dB dBarrier.
+    continuous_dB ltrue dBarrier.
   Proof.
-    unfold continuous_dB. intros.
-    apply piecewise_continuous.
+    unfold dBarrier, dBarrier_sqrt, dBarrier_lin.
+    apply continuous_dB_piecewise.
+    { auto_continuous_dB; try continuous_dB_vars.
+      { admit. }
+      { admit. }
+      { admit. } }
+    { auto_continuous_dB; try continuous_dB_vars. }
+    { admit. }
+    { intros. apply continuous_fst. }
   Admitted.
 
   (* The relation characterizing intersample behavior of the system. *)
