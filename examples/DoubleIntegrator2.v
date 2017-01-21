@@ -200,16 +200,14 @@ Ltac rewrite_R0 :=
   Lemma continuous_dBarrier :
     continuous_dB ltrue dBarrier.
   Proof.
-    unfold dBarrier, dBarrier_sqrt, dBarrier_lin.
+    unfold dBarrier, dBarrier_sqr, dBarrier_lin.
     apply continuous_dB_piecewise.
-    { auto_continuous_dB; try continuous_dB_vars.
-      { admit. }
-      { admit. }
-      { admit. } }
     { auto_continuous_dB; try continuous_dB_vars. }
-    { admit. }
-    { intros. apply continuous_fst. }
-  Admitted.
+    { auto_continuous_dB; try continuous_dB_vars.
+      simpl. intros. psatzl R. }
+    { simpl.  intros. rewrite H. field. psatzl R. }
+    { intros. apply continuous_snd. }
+  Qed.
 
   (* The relation characterizing intersample behavior of the system. *)
   Definition intersample (smpl st : state) : Prop :=
