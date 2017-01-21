@@ -44,7 +44,7 @@ Section DblInt.
     x st' = v st /\ v st' = u smpl.
 
   (* The primary barrier function for this system. *)
-  (* x + umax/(2gamma^2) + v^2/(2umax^2) *)
+  (* x + (umax*gamma^2)/2 + v^2/(2umax^2) *)
   Definition Barrier_sqr : barrier state :=
     x [+] (#umax[*]#gamma[*]#gamma[/]#2) [+] v[*]v[/](#2[*]#umax).
   (* gamma*v + x *)
@@ -57,7 +57,7 @@ Section DblInt.
   (* x' + v*v'/umax *)
   Definition dBarrier_sqr : dbarrier state :=
     d[x] [[+]] $[v][[*]]d[v][[/]]#umax.
-  (* v' + gamma*x' *)
+  (* gamma*v' + x' *)
   Definition dBarrier_lin : dbarrier state :=
     ##gamma[*]d[v] [[+]] d[x].
   Definition dBarrier : dbarrier state :=
@@ -230,14 +230,6 @@ Ltac rewrite_R0 :=
   Proof.
     unfold intersample_relation_valid. intros.
   Admitted.
-
-Goal forall (a x1 x2 y1 y2 y3 : R), x1 > 0 -> y1 > 0 ->
-   y1 <= y3 ->
-   a + x1 * y3 <= x2 * y2 ->
-   a + x1 * y1 <= x2 * y2.
-Proof.
-  intros. rewrite H1; auto.
-Qed.
 
   (* The "inductive" condition on the barrier function, i.e. its derivative
      is proportional to its value. *)

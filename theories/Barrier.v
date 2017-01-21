@@ -173,7 +173,6 @@ Section ODE.
       { apply exp_pos. } }
   Qed.
 
-
   Definition trajectory_invariant
              (F : trajectory) (P : StateProp) :=
     P (F 0) -> forall (t : R), 0 <= t -> P (F t).
@@ -276,8 +275,116 @@ Section ODE.
     pose proof (exp_pos (lambda * t)). psatz R.
   Qed.
 
+  Definition exp_condition2 (B : barrier) (dB : dbarrier)
+             (f : state -> state -> state -> Prop)
+             (lambda : R) :=
+    forall (x' xk : state),
+      f x' xk xk -> dB x' xk <= lambda * B xk.
+
+  Lemma exp_integral_const :
+    forall (f df : R -> R) (a C : R),
+      (forall x, 0 <= x -> continuous df x) ->
+      (forall x, is_derive f x (df x)) ->
+      (forall x, 0 <= x -> df x <= a * f x + C) ->
+      forall x, 0 <= x -> f x <= f 0 * exp (a * x) - C/a.
+  Admitted.
+
   Definition bounded_samples (sample : R -> R) (T : R) :=
     forall t, 0 <= t - sample t <= T.
+
+  Require Import Control.Arithmetic.
+  Theorem barrier_exp_condition_sampled2 :
+    forall (B : barrier) (dB : dbarrier),
+      derive_barrier B dB ->
+      continuous_dB ltrue dB ->
+      forall (f : state -> state -> state -> Prop) (F : trajectory)
+             (lambda : R) (sample : R -> R)
+             (rel : state -> state -> Prop) (C : R) (T : R),
+        solution_sampled_data f F sample ->
+        intersample_relation_valid rel sample F ->
+        exp_condition2 B dB f lambda ->
+        (forall (x' x xk : state),
+            rel xk x -> dB x' x <= dB x' xk + C) ->
+        bounded_samples sample T ->
+        forall t : R, B (F t) <= B (F 0)*exp(t).
+  Proof.
+    intros. pose proof H1 as Hsol. destruct H1 as [D [? ?]].
+    assert (Derive (fun t => B (F t)) = fun t : R => dB (D t) (F t))
+           as HDerive.
+    { apply functional_extensionality. intros. apply is_derive_unique.
+      apply H; auto.
+      { eapply sampled_solution_continuous; eauto. }
+      { tauto. } }
+    assert (forall x, continuous (fun t0 : R => dB (D t0) (F t0)) x).
+    { intros. eapply continuous_comp_2 in H0.
+      { apply H0. }
+      { auto. }
+      { eapply sampled_solution_continuous; eauto. }
+      { exact I. } }
+    assert (forall t,
+               B (F t) = B (F (sample t)) +
+                         RInt (fun t => dB (D t) (F t)) (sample t) t)
+      as HRInt1.
+    { intros. rewrite <- HDerive. rewrite RInt_Derive.
+      { field. }
+      { intros. unfold ex_derive. eexists; apply H; auto.
+        { intros. eapply sampled_solution_continuous; eauto. }
+        { intros. apply H6. } }
+      { intros. rewrite HDerive. auto. } }
+    assert (forall t,
+               is_RInt (fun t0 : R => lambda * B (F (sample t0)) + C) (sample t) t
+                       (lambda * B (F (sample t))*t + C * t)) as HRInt_val.
+    { admit. }
+    assert (forall t,
+               B (F t) <= B (F (sample t)) +
+                          RInt (fun t => lambda*(B (F (sample t))) + C) (sample t) t)
+      as RInt2.
+    { intros. rewrite HRInt1. apply Rplus_le_compat_l.
+      apply RInt_le.
+      { assert (0 <= t0 - sample t0) by apply H6. psatzl R. }
+      { eexists. apply is_RInt_derive.
+        { intros. apply H; auto.
+          { intros. eapply sampled_solution_continuous; eauto. }
+          { intros. apply H6. } }
+        { auto. } }
+      { unfold ex_RInt. eexists; eauto. }
+      { intros. rewrite H4.
+        { apply Rplus_le_compat_r. apply H3. admit. (* sample (sample t) = t *) }
+        { apply H2. } } }
+    assert (exists a M, forall t, dB (D t) (F t) <= a * B (F t) + M).
+    { eexists. eexists. intros. rewrite H4; eauto.
+      unfold exp_condition2 in *. rewrite H3.
+    About is_RInt_unique.
+    
+
+SearchAbout RInt Rle.
+
+eexists. eexists. intros.
+    
+
+    pose proof H1 as Hsol.
+    unfold solution_sampled_data in *. destruct H1 as [D [? ?]].
+    pose proof (exp_integral_const (fun t => B (F t)) (fun t => dB (D t) (F t))).
+    simpl in *. eapply H1.
+
+    unfold trajectory_invariant, intersample_relation_valid.
+    intros. pose proof H1 as Hsol.
+    unfold solution_sampled_data in *. destruct H1 as [D [? ?]].
+    assert (B (F t) <= B (F 0) * exp (lambda * t)).
+    { apply exp_integral
+      with (f:=fun t => B (F t)) (df:=fun t => dB (D t) (F t));
+      auto.
+      { intros. eapply continuous_comp_2 in H0.
+        { apply H0. }
+        { auto. }
+        { eapply sampled_solution_continuous; eauto. }
+        { exact I. } }
+      { intros. apply H; auto. intros.
+        { eapply sampled_solution_continuous; eauto. }
+        { apply H6. } }
+      { intros. eapply H3. 2: apply H6. apply H2. } }
+    pose proof (exp_pos (lambda * t)). psatz R.
+  Qed.
 
 End ODE.
 
