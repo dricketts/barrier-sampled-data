@@ -60,6 +60,13 @@ Section ODE.
     ILogicOps_iso _ _.
   Global Instance ILogic_FlowProp : ILogic FlowProp := _.
 
+  Require Import Coq.Classes.RelationClasses.
+
+  Global Instance Reflexive_Rge : Reflexive Rge.
+  Proof.
+    red. intro. apply Req_ge. reflexivity.
+  Qed.
+
   Definition derive_barrier := derive_barrier_dom (fun _ => True).
 
   (* If a system of ODEs has a solution, then that solution is continuous. *)
@@ -94,47 +101,6 @@ Section ODE.
     assert (m <= m - x).
     { apply H0; auto. }
     destruct x. simpl in *. psatzl R.
-  Qed.
-
-  Require Import Coq.Classes.RelationClasses.
-  Require Import Setoid Relation_Definitions.
-  Require Import Coq.Reals.RIneq.
-  Global Instance Reflexive_Rge : Reflexive Rge.
-  Proof.
-    red. intro. apply Req_ge. reflexivity.
-  Qed.
-
-  Global Instance Reflexive_Rle : Reflexive Rle.
-  Proof.
-    red. intro. apply Req_ge. reflexivity.
-  Qed.
-  Global Instance Transitive_Rge : Transitive Rge.
-  Proof.
-    red. intros. eapply Rge_trans; eauto.
-  Qed.
-
-  Global Instance Transitive_Rle : Transitive Rle.
-  Proof.
-    red. intros. eapply Rle_trans; eauto.
-  Qed.
-
-  Local Open Scope R.
-
-  Add Parametric Relation : R Rle
-      reflexivity proved by Rle_refl
-      transitivity proved by Rle_trans
-        as Rle_setoid_relation.
-
-  Add Parametric Morphism : Rplus with
-      signature Rle ++> Rle ++> Rle as Rplus_Rle_mor.
-    intros ; apply Rplus_le_compat ; assumption.
-  Qed.
-
-  Add Parametric Morphism : Rminus with
-      signature Rle ++> Rle --> Rle as Rminus_Rle_mor.
-    intros ; unfold Rminus ;
-      apply Rplus_le_compat;
-      [assumption | apply Ropp_le_contravar ; assumption].
   Qed.
 
   Lemma exp_integral :
@@ -207,7 +173,9 @@ Section ODE.
       { apply exp_pos. } }
   Qed.
 
-  Definition trajectory_invariant (F : trajectory) (P : state -> Prop) :=
+
+  Definition trajectory_invariant
+             (F : trajectory) (P : StateProp) :=
     P (F 0) -> forall (t : R), 0 <= t -> P (F t).
 
   Theorem barrier_exp_condition :
@@ -226,15 +194,18 @@ Section ODE.
     intros. destruct H1 as [a H1]. destruct H2.
     assert (B (F t) <= B (F 0) * exp (a * t)).
     { apply exp_integral
-      with (f:=fun t => B (F t)) (df:=fun t => dB (x t) (F t)); auto.
+      with (f:=fun t => B (F t))
+             (df:=fun t => dB (x t) (F t)); auto.
       { intros. apply H; auto.
-        { eapply solution_continuous. unfold solution. eexists. apply H2. }
+        { eapply solution_continuous. unfold solution.
+          eexists. apply H2. }
         { apply H2. } }
       { intros. eapply H1. apply H2. assumption. } }
     pose proof (exp_pos (a * t)). subst. psatz R.
   Qed.
 
-  Definition solution_sampled_data (f : state -> state -> state -> Prop)
+  Definition solution_sampled_data
+             (f : state -> state -> state -> Prop)
              (F : trajectory) (sample : R -> R) : Prop :=
     exists (D : R -> state),
       (forall x, continuous D x) /\
@@ -243,29 +214,34 @@ Section ODE.
       (forall t, 0 <= t - sample t) /\
       forall t : R, f (D t) (F t) (F (sample t)).
 
-  (* If a sampled data system of ODEs has a solution, then that solution is continuous. *)
+  (* If a sampled data system of ODEs has a solution,
+     then that solution is continuous. *)
   Lemma sampled_solution_continuous :
     forall f F sample,
       solution_sampled_data f F sample ->
       forall t, continuous F t.
   Proof.
-    intros. apply ex_derive_continuous. unfold solution_sampled_data in *.
+    intros. apply ex_derive_continuous.
+    unfold solution_sampled_data in *.
     unfold ex_derive. destruct H. exists (x t). apply H.
   Qed.
 
-  Definition intersample_relation_valid (rel : state -> state -> Prop)
+  Definition intersample_relation_valid
+             (rel : state -> state -> Prop)
              (sample : R -> R) (F : trajectory) :=
     forall t, rel (F (sample t)) (F t).
 
   Definition exp_condition (B : barrier) (dB : dbarrier)
-             (rel : state -> state -> Prop) (f : state -> state -> state -> Prop)
+             (rel : state -> state -> Prop)
+             (f : state -> state -> state -> Prop)
              (lambda : R) :=
     forall (x' x xb : state),
       rel xb x -> f x' x xb -> dB x' x <= lambda * B x.
 
   Definition continuous_dB (G : FlowProp) (dB : dbarrier) :=
     forall (p : state * state),
-      G (fst p) (snd p) -> continuous (fun p => dB (fst p) (snd p)) p.
+      G (fst p) (snd p) ->
+      continuous (fun p => dB (fst p) (snd p)) p.
 
   Local Transparent ILInsts.ILFun_Ops.
 
@@ -274,7 +250,8 @@ Section ODE.
       derive_barrier B dB ->
       continuous_dB ltrue dB ->
       forall (f : state -> state -> state -> Prop) (F : trajectory)
-             (lambda : R) (sample : R -> R) (rel : state -> state -> Prop),
+             (lambda : R) (sample : R -> R)
+             (rel : state -> state -> Prop),
         solution_sampled_data f F sample ->
         intersample_relation_valid rel sample F ->
         exp_condition B dB rel f lambda ->
@@ -285,7 +262,8 @@ Section ODE.
     unfold solution_sampled_data in *. destruct H1 as [D [? ?]].
     assert (B (F t) <= B (F 0) * exp (lambda * t)).
     { apply exp_integral
-      with (f:=fun t => B (F t)) (df:=fun t => dB (D t) (F t)); auto.
+      with (f:=fun t => B (F t)) (df:=fun t => dB (D t) (F t));
+      auto.
       { intros. eapply continuous_comp_2 in H0.
         { apply H0. }
         { auto. }

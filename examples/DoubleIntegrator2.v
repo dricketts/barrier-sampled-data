@@ -44,26 +44,24 @@ Section DblInt.
     x st' = v st /\ v st' = u smpl.
 
   (* The primary barrier function for this system. *)
-  (*     v - sqrt (-2*umax*(x + umax/(2*gamma^2))) *)
-  Definition Barrier_sqrt : barrier state :=
-    v [-] [sqrt](#(-2)[*]#umax[*](x [+] #umax[/](#(-2)[*]#gamma[*]#gamma))).
-  (* v + gamma*x *)
+  (* x + umax/(2gamma^2) + v^2/(2umax^2) *)
+  Definition Barrier_sqr : barrier state :=
+    x [+] (#umax[*]#gamma[*]#gamma[/]#2) [+] v[*]v[/](#2[*]#umax).
+  (* gamma*v + x *)
   Definition Barrier_lin : barrier state :=
-    v [+] (#gamma[*]x).
+    (#gamma[*]v) [+] x.
   Definition Barrier : barrier state :=
-    x ?<= -umax/gamma^2 [?] Barrier_sqrt [:] Barrier_lin.
+    v ?<= umax*gamma [?] Barrier_lin [:] Barrier_sqr.
 
   (* Derivative of the barrier function. *)
-  (* v' + umax*x'/sqrt (-2*umax*(x + umax/(2*gamma^2))) *)
-  Definition dBarrier_sqrt : dbarrier state :=
-    d[v] [[+]]
-    ##umax[*] d[x] [[/]]
-    ([[sqrt]] (##(-2)[[*]]##umax[[*]]($[x] [[+]] ##umax[[/]](##2[[*]]##gamma[[*]]##gamma)))).
+  (* x' + v*v'/umax *)
+  Definition dBarrier_sqr : dbarrier state :=
+    d[x] [[+]] $[v][[*]]d[v][[/]]#umax.
   (* v' + gamma*x' *)
   Definition dBarrier_lin : dbarrier state :=
-    d[v] [[+]] (##gamma[*] d[x]).
+    ##gamma[*]d[v] [[+]] d[x].
   Definition dBarrier : dbarrier state :=
-    $[x] ??<= -umax/gamma^2 [?] dBarrier_sqrt [:] dBarrier_lin.
+    $[v] ??<= umax*gamma [?] dBarrier_lin [:] dBarrier_sqr.
 
   Lemma derive_barrier_x :
     forall (G : StateProp state),
@@ -134,23 +132,26 @@ Ltac rewrite_R0 :=
     with (G1:=ltrue) (G2:=fun _ => True) (e1:=Barrier).
     { reflexivity. }
     { breakAbstraction. intros. reflexivity. }
-    { unfold Barrier, Barrier_sqrt, Barrier_lin.
+    { unfold Barrier, Barrier_sqr, Barrier_lin.
       apply derive_barrier_piecewise.
       { auto_derive_barrier.
         { apply derive_barrier_v. }
-        { apply derive_barrier_x. }
-        { breakAbstraction. intros. pose proof gamma_gt_0. psatz R. }
-        { breakAbstraction. intros. destruct t. admit. } }
-      { auto_derive_barrier.
-        { apply derive_barrier_v. }
         { apply derive_barrier_x. } }
-      { simpl. intros. destruct t. destruct t0. simpl in *.
-        rewrite_R0. unfold Rdiv at 2. rewrite_R0. subst r1.
-        admit. }
-      { admit. }
-      { intros. apply continuous_fst. } }
-    { admit. }
-  Admitted.
+      { auto_derive_barrier.
+        { apply derive_barrier_x. }
+        { simpl. intros. smt solve; apply by_z3. }
+        { apply derive_barrier_v. }
+        { apply derive_barrier_v. }
+        { simpl. intros. psatzl R. } }
+      { simpl. intros. destruct H. rewrite H0. rewrite_R0.
+        unfold Rdiv at 1. rewrite_R0. field. psatzl R. }
+      { simpl. intros. destruct H. rewrite H0. field. psatzl R. }
+      { intros. apply continuous_snd. } }
+    { unfold dBarrier, dBarrier_sqr, dBarrier_lin.
+      simpl. intros. destruct (Rle_dec (v t0) (umax * gamma)).
+      { rewrite_R0. field. }
+      { rewrite_R0. field. psatzl R. } }
+  Qed.
 
   Lemma continuous_dB_x :
     forall G,

@@ -97,13 +97,13 @@ Section BarrierRules.
     if Rle_dec (k x) a then f x else g x.
 
   Lemma piecewise_is_derive :
-    forall (T : NormedModule R_AbsRing) (f g df dg : R -> T) (a : R) (k : R -> R),
-    (forall x, k x <= a -> is_derive f x (df x)) ->
-    (forall x, k x >= a -> is_derive g x (dg x)) ->
-    (forall x, k x = a -> df x = dg x) ->
-    (forall x, k x = a -> f x = g x) ->
+    forall (T : NormedModule R_AbsRing) (f g df dg : R -> T) (a : R) (k : R -> R) (K : R -> Prop),
+    (forall x, K x -> k x <= a -> is_derive f x (df x)) ->
+    (forall x, K x -> k x >= a -> is_derive g x (dg x)) ->
+    (forall x, K x -> k x = a -> df x = dg x) ->
+    (forall x, K x -> k x = a -> f x = g x) ->
     (forall x, continuous k x) ->
-    forall x, is_derive (piecewise f g a k) x (piecewise df dg a k x).
+    forall x, K x -> is_derive (piecewise f g a k) x (piecewise df dg a k x).
   Proof.
     intros.
     destruct (Rle_dec (k x) a).
@@ -116,17 +116,17 @@ Section BarrierRules.
           { simpl. intros. unfold piecewise.
             destruct (Rle_dec (k x0) a); try psatzl R. reflexivity. } }
         { unfold piecewise. destruct (Rle_dec (k x) a); try psatzl R.
-          apply H. assumption. } }
+          apply H; auto. } }
       { split.
         { apply is_linear_scal_l. }
         { intros x0 Hx eps. pose proof (is_filter_lim_locally_unique _ _ Hx).
-          simpl. subst x0. specialize (H x (or_intror H4)). specialize (H0 x (or_intror H4)).
+          simpl. subst x0. specialize (H x H4 (or_intror H5)). specialize (H0 x H4 (or_intror H5)).
           destruct H as [? Cf]. destruct H0 as [? Cg].
           specialize (Cf _ Hx eps). specialize (Cg _ Hx eps). pose proof (filter_and _ _ Cf Cg).
           eapply filter_imp; eauto. simpl. intros. unfold piecewise.
           destruct (Rle_dec (k x) a); try psatzl R. destruct (Rle_dec (k x0) a).
           { tauto. }
-          { rewrite H1; auto; rewrite H2; tauto. } } } }
+          { rewrite H1; auto. rewrite H2; tauto. } } } }
     { apply (is_derive_ext_loc g).
       { apply locally_open with (D:= fun x => k x > a); try psatzl R.
         { apply (open_comp k (fun x => x > a)).
@@ -135,16 +135,16 @@ Section BarrierRules.
         { simpl. intros. unfold piecewise.
           destruct (Rle_dec (k x0) a); try psatzl R. reflexivity. } }
       { unfold piecewise. destruct (Rle_dec (k x) a); try psatzl R.
-        apply H0. psatzl R. } }
+        apply H0; auto. psatzl R. } }
   Qed.
 
   Lemma derive_barrier_piecewise :
     forall (c : StateVal state R) (x : R) (e1 e2 : barrier state)
            (e1' e2' : dbarrier state) (G : StateProp state),
-      derive_barrier_dom (c [<=] #x) e1 e1' ->
-      derive_barrier_dom (c [>=] #x) e2 e2' ->
-      $[c] [[=]] ##x |-- e1' [[=]] e2' ->
-      c [=] #x |-- e1 [=] e2 ->
+      derive_barrier_dom (G //\\ c [<=] #x) e1 e1' ->
+      derive_barrier_dom (G //\\ c [>=] #x) e2 e2' ->
+      $[G] //\\ $[c] [[=]] ##x |-- e1' [[=]] e2' ->
+      G //\\ c [=] #x |-- e1 [=] e2 ->
       (forall x, continuous c x) ->
       derive_barrier_dom G (c ?<= x [?] e1 [:] e2) ($[c] ??<= x [?] e1' [:] e2').
   Proof.
@@ -154,7 +154,8 @@ Section BarrierRules.
            (f:=fun t => e1 (F t))
            (g:=fun t => e2 (F t))
            (df:=fun t => e1' (D t) (F t))
-           (dg:=fun t => e2' (D t) (F t)); auto.
+           (dg:=fun t => e2' (D t) (F t))
+           (K:=fun t => G (F t)); auto.
     intros. apply continuous_comp; auto.
   Qed.
 
