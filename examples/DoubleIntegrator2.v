@@ -298,10 +298,13 @@ Ltac rewrite_R0 :=
     simpl. intros. destruct H. specialize (u_barrier_constraint xk).
     destruct (Rle_dec (v xk) (umax * gamma)).
     { unfold dBarrier_lin, Barrier_lin. simpl. rewrite H. rewrite H0.
-      admit. }
+      rewrite u_barrier_constraint; try psatzl R. right. field. psatzl R. }
     { unfold dBarrier_sqr, Barrier_sqr. simpl. rewrite H. rewrite H0.
-      admit. }
-  Admitted.
+      unfold Rdiv. rewrite u_barrier_constraint.
+      { right. field. repeat split; try psatzl R. psatz R. }
+      { psatz R. }
+      { apply Rgt_lt in umax_gt_0. apply Rinv_0_lt_compat in umax_gt_0. psatzl R. } }
+  Qed.
 
   (* Invariance of the barrier region. *)
   Theorem barrier_inv :
