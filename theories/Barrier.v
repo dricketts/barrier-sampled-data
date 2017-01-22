@@ -278,8 +278,8 @@ Section ODE.
   Definition exp_condition2 (B : barrier) (dB : dbarrier)
              (f : state -> state -> state -> Prop)
              (lambda : R) :=
-    forall (x' xk : state),
-      f x' xk xk -> dB x' xk <= lambda * B xk.
+    forall (x' x xk : state),
+      f x' x xk -> dB x' xk <= lambda * B xk.
 
   Lemma exp_integral_const :
     forall (f df : R -> R) (a C : R),
@@ -292,98 +292,190 @@ Section ODE.
   Definition bounded_samples (sample : R -> R) (T : R) :=
     forall t, 0 <= t - sample t <= T.
 
+  Definition solution_sampled_data2
+             (f : state -> state -> state -> Prop)
+             (F : trajectory) (sample : nat -> R) : Prop :=
+    exists (D : R -> state),
+      (forall x, continuous D x) /\
+      (forall (t : R),
+          is_derive F t (D t)) /\
+      forall n : nat,
+        let a := sample n in
+        let b := sample (S n) in
+        forall t : R, a <= t < b -> f (D t) (F t) (F a).
+
+  (* If a sampled data system of ODEs has a solution,
+     then that solution is continuous. *)
+  Lemma sampled_solution_continuous2 :
+    forall f F sample,
+      solution_sampled_data2 f F sample ->
+      forall t, continuous F t.
+  Proof.
+    intros. apply ex_derive_continuous.
+    unfold solution_sampled_data in *.
+    unfold ex_derive. destruct H. exists (x t). apply H.
+  Qed.
+
+  Definition well_formed_samples (sample : nat -> R) :=
+    sample 0%nat = 0 /\
+    (forall n : nat, sample n < sample (S n)) /\
+    (forall t : R, exists n : nat, sample n <= t < sample (S n)).
+
+  Definition bounded_samples2 (sample : nat -> R) (T : R) :=
+    forall n : nat, sample (S n) - sample n <= T.
+
+  Definition intersample_relation_valid2
+             (rel : state -> state -> Prop)
+             (sample : nat -> R) (F : trajectory) :=
+    forall n : nat,
+      let a := sample n in
+        let b := sample (S n) in
+        forall t : R, a <= t < b -> rel (F a) (F t).
+
+Lemma reals_dense :
+  forall (x y : R),
+    x < y ->
+    exists z : R, x < z < y.
+Proof.
+  intros x y Hxy.
+  pose proof (archimed (1/(y - x))).
+  destruct H. clear H0.
+  generalize dependent (IZR (up (1 / (y - x)))). intros n H.
+  pose proof (archimed (n * x)). destruct H0.
+  generalize dependent (IZR (up (n * x))). intros m H0 H1.
+  exists (m / n).
+  assert ((y - x) * / (y - x) = 1) by (apply Rinv_r; psatzl R).
+  assert ((y - x) * n > 1).
+  { unfold Rdiv in *. rewrite Rmult_1_l in *. psatz R. }
+  cut (n * x < m < n * y).
+  { assert (n * / n = 1) by (apply Rinv_r; psatz R).
+    intros. unfold Rdiv. generalize dependent (/n). intros.
+    assert (n > 0) by psatz R.
+    clear - H4 H5 H6. split; psatz R. }
+  { psatz R. }
+Qed.
+Lemma closed_continuous :
+  forall {T : UniformSpace} (D : T -> Prop),
+    closed D ->
+    forall (f : R -> T) (u l : R),
+      l < u ->
+      (forall r, l <= r < u -> D (f r)) ->
+      continuous f u ->
+      D (f u).
+Proof.
+  intros. apply NNPP; intro.
+  unfold closed, open, continuous, locally, filterlim,
+  filter_le, filtermap in *.
+  specialize (H _ H3). specialize (H2 _ H).
+  simpl in *. destruct H2 as [eps H2].
+  cbv beta iota zeta delta - [ not abs ] in H2.
+  destruct (reals_dense (Rmax l (u - eps)) u).
+  { destruct eps. simpl. unfold Rmax.
+    destruct (Rle_dec l (u - pos)); psatzl R. }
+  apply H2 with (y:=x) in H1; auto.
+  { destruct eps. simpl in *. compute.
+    destruct (Rcase_abs (x + - u)); try psatzl R.
+    assert (u - pos < x).
+    { revert H4. unfold Rmax. destruct (Rle_dec l (u - pos)); psatzl R. }
+    psatzl R. }
+  { revert H4. apply Rmax_case_strong; intros; psatzl R. }
+Qed.
+
   Require Import Control.Arithmetic.
+  Require Import SMTC.Tactic.
+  Set SMT Solver "z3".
   Theorem barrier_exp_condition_sampled2 :
     forall (B : barrier) (dB : dbarrier),
       derive_barrier B dB ->
       continuous_dB ltrue dB ->
       forall (f : state -> state -> state -> Prop) (F : trajectory)
-             (lambda : R) (sample : R -> R)
-             (rel : state -> state -> Prop) (C : R) (T : R),
-        solution_sampled_data f F sample ->
-        intersample_relation_valid rel sample F ->
-        exp_condition2 B dB f lambda ->
+             (sample : nat -> R) (rel : state -> state -> Prop)
+             (C : R) (T : R),
+        solution_sampled_data2 f F sample ->
+        intersample_relation_valid2 rel sample F ->
+        exp_condition2 B dB f (-1/T) ->
         (forall (x' x xk : state),
-            rel xk x -> dB x' x <= dB x' xk + C) ->
-        bounded_samples sample T ->
-        forall t : R, B (F t) <= B (F 0)*exp(t).
+            rel xk x -> f x' x xk -> dB x' x <= dB x' xk + C) ->
+        well_formed_samples sample ->
+        bounded_samples2 sample T ->
+        forall (HC : C > 0) (HT : T > 0),
+        forall t : R, B (F 0) <= C * T -> B (F t) <= C * T.
   Proof.
     intros. pose proof H1 as Hsol. destruct H1 as [D [? ?]].
     assert (Derive (fun t => B (F t)) = fun t : R => dB (D t) (F t))
            as HDerive.
     { apply functional_extensionality. intros. apply is_derive_unique.
       apply H; auto.
-      { eapply sampled_solution_continuous; eauto. }
+      { eapply sampled_solution_continuous2; eauto. }
       { tauto. } }
     assert (forall x, continuous (fun t0 : R => dB (D t0) (F t0)) x).
     { intros. eapply continuous_comp_2 in H0.
       { apply H0. }
       { auto. }
-      { eapply sampled_solution_continuous; eauto. }
+      { eapply sampled_solution_continuous2; eauto. }
       { exact I. } }
-    assert (forall t,
-               B (F t) = B (F (sample t)) +
-                         RInt (fun t => dB (D t) (F t)) (sample t) t)
+    assert (forall n t,
+               B (F t) = B (F (sample n)) +
+                         RInt (fun t => dB (D t) (F t)) (sample n) t)
       as HRInt1.
     { intros. rewrite <- HDerive. rewrite RInt_Derive.
       { field. }
       { intros. unfold ex_derive. eexists; apply H; auto.
-        { intros. eapply sampled_solution_continuous; eauto. }
-        { intros. apply H6. } }
+        { intros. eapply sampled_solution_continuous2; eauto. }
+        { intros. apply H8. } }
       { intros. rewrite HDerive. auto. } }
-    assert (forall t,
-               is_RInt (fun t0 : R => lambda * B (F (sample t0)) + C) (sample t) t
-                       (lambda * B (F (sample t))*t + C * t)) as HRInt_val.
-    { admit. }
-    assert (forall t,
-               B (F t) <= B (F (sample t)) +
-                          RInt (fun t => lambda*(B (F (sample t))) + C) (sample t) t)
+    assert (forall n t,
+               is_RInt (fun _ => (-1/T) * B (F (sample n)) + C) (sample n) t
+                       ((t - sample n) * ((-1/T) * B (F (sample n)) + C))) as HRInt_val.
+    { intros. apply (is_RInt_const (sample n) t0 ((-1/T) * B (F (sample n)) + C)). }
+    assert (forall n t,
+               sample n <= t < sample (S n) ->
+               B (F t) <= B (F (sample n)) +
+                          RInt (fun _ => (-1/T)*(B (F (sample n))) + C) (sample n) t)
       as RInt2.
-    { intros. rewrite HRInt1. apply Rplus_le_compat_l.
+    { intros. erewrite HRInt1. apply Rplus_le_compat_l.
       apply RInt_le.
-      { assert (0 <= t0 - sample t0) by apply H6. psatzl R. }
+      { tauto. }
       { eexists. apply is_RInt_derive.
         { intros. apply H; auto.
-          { intros. eapply sampled_solution_continuous; eauto. }
-          { intros. apply H6. } }
+          { intros. eapply sampled_solution_continuous2; eauto. }
+          { intros. apply H8. } }
         { auto. } }
       { unfold ex_RInt. eexists; eauto. }
       { intros. rewrite H4.
-        { apply Rplus_le_compat_r. apply H3. admit. (* sample (sample t) = t *) }
-        { apply H2. } } }
-    assert (exists a M, forall t, dB (D t) (F t) <= a * B (F t) + M).
-    { eexists. eexists. intros. rewrite H4; eauto.
-      unfold exp_condition2 in *. rewrite H3.
-    About is_RInt_unique.
-    
-
-SearchAbout RInt Rle.
-
-eexists. eexists. intros.
-    
-
-    pose proof H1 as Hsol.
-    unfold solution_sampled_data in *. destruct H1 as [D [? ?]].
-    pose proof (exp_integral_const (fun t => B (F t)) (fun t => dB (D t) (F t))).
-    simpl in *. eapply H1.
-
-    unfold trajectory_invariant, intersample_relation_valid.
-    intros. pose proof H1 as Hsol.
-    unfold solution_sampled_data in *. destruct H1 as [D [? ?]].
-    assert (B (F t) <= B (F 0) * exp (lambda * t)).
-    { apply exp_integral
-      with (f:=fun t => B (F t)) (df:=fun t => dB (D t) (F t));
-      auto.
-      { intros. eapply continuous_comp_2 in H0.
-        { apply H0. }
-        { auto. }
-        { eapply sampled_solution_continuous; eauto. }
-        { exact I. } }
-      { intros. apply H; auto. intros.
-        { eapply sampled_solution_continuous; eauto. }
-        { apply H6. } }
-      { intros. eapply H3. 2: apply H6. apply H2. } }
-    pose proof (exp_pos (lambda * t)). psatz R.
+        { apply Rplus_le_compat_r. eapply H3. apply H8. psatzl R. }
+        { apply H2. psatzl R. }
+        { apply H8. psatzl R. } } }
+    assert (forall n,
+               B (F (sample n)) <= C*T ->
+               forall t,
+                 sample n <= t < sample (S n) ->
+                 B (F t) <= C*T) as HCT.
+    { intros ? ? ? Hsmpl. specialize (RInt2 _ _ Hsmpl).
+      erewrite is_RInt_unique in RInt2; eauto.
+      assert (0 <= t0 - sample n) by psatzl R.
+      assert (t0 - sample n <= T).
+      { unfold bounded_samples2 in *. specialize (H6 n).
+        psatzl R. }
+      rewrite RInt2.
+      destruct (Rle_dec ((-1/T) * B (F (sample n)) + C) 0).
+      { rewrite H10 at 1. psatz R. }
+      { etransitivity.
+        { apply Rplus_le_compat_l. apply Rmult_le_compat; try psatzl R; eauto.
+          reflexivity. }
+        { field_simplify; psatzl R. } } }
+    destruct H5. destruct H10. specialize (H11 t). destruct H11 as [n Hn].
+    eapply HCT; eauto. clear Hn. induction n.
+    { congruence. }
+    { specialize (HCT n IHn). eapply closed_continuous with (f0:=fun t => B (F t)).
+      { unfold closed. eapply open_ext. 2: apply open_gt. intros.
+        simpl. instantiate (1:=C * T). psatzl R. }
+      { instantiate (1:=sample n). auto. }
+      { auto. }
+      { apply ex_derive_continuous with (f0:=fun t => B (F t)).
+        eexists. apply H; auto.
+        { eapply sampled_solution_continuous2; eauto. }
+        { intros. apply H8. } } }
   Qed.
 
 End ODE.
