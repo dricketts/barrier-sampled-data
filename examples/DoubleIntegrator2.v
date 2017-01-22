@@ -29,15 +29,25 @@ Section DblInt.
   (* The maximum control magnitude. *)
   Variable umax : R.
   Hypothesis umax_gt_0 : umax > 0.
-  Hypothesis umax_bounds_u : forall st, abs (u st) <= umax.
+  Hypothesis u_le_umax : forall st, u st <= umax.
+  Hypothesis neg_umax_le_u : forall st, -umax <= u st.
+
   (* The bound between sample times. *)
   Variable T : R.
+  Hypothesis T_gt_0 : T > 0.
 
   (* Some design parameters of the control constraints. *)
   Variable gamma : R.
   Hypothesis gamma_gt_0 : gamma > 0.
   Variable alpha : R.
   Hypothesis alpha_gt_0 : alpha > 0.
+
+  (* Upper bound on u to enforce barrier invariance. *)
+  Hypothesis u_barrier_constraint : forall st,
+      u st <=
+      if Rle_dec (v st) (umax * gamma)
+      then (-1 / T * (gamma * v st + x st) - v st)/gamma
+      else umax*(-1/T * (x st + umax * gamma * gamma/2 + v st * v st / (2 * umax)) - v st)/v st.
 
   (* The sampled data evolution of the system, x' = v, v' = u *)
   Definition ODE (st' st smpl : state) : Prop :=
@@ -211,8 +221,9 @@ Ltac rewrite_R0 :=
 
   (* The relation characterizing intersample behavior of the system. *)
   Definition intersample (smpl st : state) : Prop :=
-    x st <= x smpl + v smpl * T + /2*umax*T^2 /\
-    v st <= v smpl + umax * T.
+    if Rle_dec 0 (u smpl)
+    then v st <= v smpl + u smpl * T
+    else v st <= v smpl.
 
 (*
   Lemma intersample_valid_aux :
@@ -223,47 +234,91 @@ Ltac rewrite_R0 :=
 
   (* The intersample relation is a valid characterization of intersample behavior. *)
   Lemma intersample_valid :
-    forall (F : trajectory _) (sample : R -> R),
-      solution_sampled_data ODE F sample ->
-      bounded_samples sample T ->
-      intersample_relation_valid intersample sample F.
+    forall (F : trajectory _) (sample : nat -> R),
+      solution_sampled_data2 _ ODE F sample ->
+      bounded_samples2 sample T ->
+      intersample_relation_valid2 _ intersample sample F.
   Proof.
-    unfold intersample_relation_valid. intros.
   Admitted.
+
+  Lemma intersample_derive_bound :
+    forall st' stk' st stk : state,
+      intersample stk st ->
+      ODE st' st stk -> ODE stk' stk stk ->
+      dBarrier st' st <= dBarrier stk' stk + (2*umax*T + 2*gamma*umax).
+  Proof.
+    unfold intersample, ODE, dBarrier. simpl. intros. destruct H0.
+    assert (/umax > 0) as umax_inv by (apply Rlt_gt; apply Rinv_0_lt_compat; psatzl R).
+    destruct H1. destruct (Rle_dec (v st) (umax * gamma)).
+    { destruct (Rle_dec (v stk) (umax * gamma)).
+      { unfold dBarrier_lin. simpl. rewrite H0. rewrite H2.
+        rewrite H1. rewrite H3.
+        destruct (Rle_dec 0 (u stk)).
+        { rewrite H. specialize (u_le_umax stk). psatz R. }
+        { rewrite H. psatz R. } }
+      { unfold dBarrier_lin, dBarrier_sqr. simpl. rewrite H0. rewrite H2.
+        rewrite H1. rewrite H3. rewrite r. specialize (u_le_umax stk).
+        rewrite u_le_umax at 1; try psatzl R. unfold Rdiv.
+        rewrite <- neg_umax_le_u; try psatzl R.
+        { assert (0 <= 2 * umax * T) by psatz R.
+          rewrite <- H4. right. field. psatzl R. }
+        { psatz R. } } }
+    { destruct (Rle_dec (v stk) (umax * gamma)).
+      { unfold dBarrier_lin, dBarrier_sqr. simpl. rewrite H0. rewrite H2.
+        rewrite H1. rewrite H3. destruct (Rle_dec 0 (u stk)).
+        { rewrite H at 1. rewrite r at 1. rewrite u_le_umax at 1; try psatzl R.
+          unfold Rdiv. rewrite u_le_umax at 1; try psatzl R.
+          { rewrite H at 1; try psatzl R. rewrite u_le_umax at 1; try psatzl R.
+            rewrite <- neg_umax_le_u; try psatzl R. right. field. psatzl R. }
+          { psatz R. } }
+        { psatzl R. } }
+      { unfold dBarrier_sqr. simpl. rewrite H0. rewrite H2. rewrite H1.
+        replace (v st + v st * u stk / umax) with (v st*(1 + u stk / umax)) by (field; psatzl R).
+        assert (1 + u stk / umax >= 0).
+        { unfold Rdiv. apply Rle_ge. rewrite <- neg_umax_le_u; try psatzl R.
+          right. field. psatzl R. }
+        rewrite H3. destruct (Rle_dec 0 (u stk)).
+        { rewrite H; auto. rewrite u_le_umax at 1; try psatzl R.
+          rewrite Rmult_plus_distr_r. 
+          unfold Rdiv. rewrite u_le_umax at 2; try psatzl R.
+          { assert (0 <= 2 * gamma * umax) by psatz R. rewrite <- H5.
+            right. field. psatzl R. }
+          { psatz R. } }
+        { assert (0 <= 2 * umax * T + 2 * gamma * umax) by psatz R. rewrite <- H5.
+          rewrite H; auto. right. field. psatzl R. } } }
+  Qed.
+
 
   (* The "inductive" condition on the barrier function, i.e. its derivative
      is proportional to its value. *)
   Lemma Barrier_inductive :
-      exp_condition Barrier dBarrier intersample ODE (-alpha).
+      exp_condition2 _ Barrier dBarrier ODE (-1/T).
   Proof.
-    unfold exp_condition, Barrier, dBarrier, intersample, ODE.
-    simpl. intros. destruct H0. destruct H.
-    destruct (Rle_dec (x x0) (- umax / (gamma * (gamma * 1)))).
-    { unfold dBarrier_sqrt, Barrier_sqrt. simpl. rewrite H0.
-      rewrite H1. admit. }
-    { unfold dBarrier_lin, Barrier_lin. simpl. rewrite H0.
-      rewrite H1. rewrite H2 at 1; auto. rewrite <- Ropp_mult_distr_l.
-      apply Ropp_le_cancel. do 2 rewrite Ropp_mult_distr_l.
-      rewrite H2; try psatzl R. rewrite H; try psatzl R.
-      rewrie
- rewrite H2 at 1; auto. rewrite <- H2.
-
-Print Instances Morphisms.Proper.
-
-rewrite H2 at 1.
+    unfold exp_condition2, Barrier, dBarrier, ODE.
+    simpl. intros. destruct H. specialize (u_barrier_constraint xk).
+    destruct (Rle_dec (v xk) (umax * gamma)).
+    { unfold dBarrier_lin, Barrier_lin. simpl. rewrite H. rewrite H0.
+      admit. }
+    { unfold dBarrier_sqr, Barrier_sqr. simpl. rewrite H. rewrite H0.
+      admit. }
+  Admitted.
 
   (* Invariance of the barrier region. *)
   Theorem barrier_inv :
-    forall (F : trajectory _) (sample : R -> R),
-      solution_sampled_data ODE F sample ->
-      bounded_samples sample T ->
-      trajectory_invariant F (fun st => Barrier st <= 0).
+    forall (F : trajectory _) (sample : nat -> R),
+      solution_sampled_data2 _ ODE F sample ->
+      well_formed_samples sample ->
+      bounded_samples2 sample T ->
+      forall t : R, Barrier (F 0) <= (2*umax*T + 2*gamma*umax) * T ->
+                    Barrier (F t) <= (2*umax*T + 2*gamma*umax) * T.
   Proof.
-    intros. eapply barrier_exp_condition_sampled; eauto.
+    intros. eapply barrier_exp_condition_sampled2; eauto.
     { apply dBarrier_valid. }
     { apply continuous_dBarrier. }
     { apply intersample_valid; assumption. }
     { apply Barrier_inductive. }
+    { apply intersample_derive_bound. }
+    { psatz R. }
   Qed.
 
 End DblInt.

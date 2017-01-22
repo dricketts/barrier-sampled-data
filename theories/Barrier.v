@@ -278,16 +278,8 @@ Section ODE.
   Definition exp_condition2 (B : barrier) (dB : dbarrier)
              (f : state -> state -> state -> Prop)
              (lambda : R) :=
-    forall (x' x xk : state),
-      f x' x xk -> dB x' xk <= lambda * B xk.
-
-  Lemma exp_integral_const :
-    forall (f df : R -> R) (a C : R),
-      (forall x, 0 <= x -> continuous df x) ->
-      (forall x, is_derive f x (df x)) ->
-      (forall x, 0 <= x -> df x <= a * f x + C) ->
-      forall x, 0 <= x -> f x <= f 0 * exp (a * x) - C/a.
-  Admitted.
+    forall (x' xk : state),
+      f x' xk xk -> dB x' xk <= lambda * B xk.
 
   Definition bounded_samples (sample : R -> R) (T : R) :=
     forall t, 0 <= t - sample t <= T.
@@ -394,8 +386,8 @@ Qed.
         solution_sampled_data2 f F sample ->
         intersample_relation_valid2 rel sample F ->
         exp_condition2 B dB f (-1/T) ->
-        (forall (x' x xk : state),
-            rel xk x -> f x' x xk -> dB x' x <= dB x' xk + C) ->
+        (forall (x' xk' x xk : state),
+            rel xk x -> f x' x xk -> f xk' xk xk -> dB x' x <= dB xk' xk + C) ->
         well_formed_samples sample ->
         bounded_samples2 sample T ->
         forall (HC : C > 0) (HT : T > 0),
@@ -445,6 +437,7 @@ Qed.
       { intros. rewrite H4.
         { apply Rplus_le_compat_r. eapply H3. apply H8. psatzl R. }
         { apply H2. psatzl R. }
+        { apply H8. psatzl R. }
         { apply H8. psatzl R. } } }
     assert (forall n,
                B (F (sample n)) <= C*T ->
