@@ -405,6 +405,39 @@ Section ODE.
     { destruct H. destruct H0. specialize (H0 n). psatzl R. }
   Qed.
 
+  Theorem barrier_exp_condition_sampled_weak :
+    forall (B : barrier) (dB : dbarrier),
+      derive_barrier B dB ->
+      continuous_dB ltrue dB ->
+      forall (f : state -> state -> state -> Prop)
+             (sample : nat -> R) (G : TrajectoryProp) (P : StateProp)
+             (lambda : R),
+        G |-- sampled_data f sample ->
+        (forall stk, $[P] |-- exp_inductive (fun st' st => f st' st stk) B dB lambda) ->
+        well_formed_samples sample ->
+        G |-- []P ->
+        G |-- !(B [<=] #0) ->
+        G |-- [](B [<=] #0).
+  Proof.
+    unfold always, start. simpl. intros. rename t into F.
+    specialize (H1 _ H6). specialize (H4 _ H6). specialize (H5 _ H6).
+    remember H1 as Hsol.
+    assert (B (F t0) <= B (F 0) * exp (lambda * t0)).
+    { destruct H1.
+      apply exp_integral
+      with (f:=fun t => B (F t))
+             (df:=fun t => dB (x t) (F t)); auto.
+      { intros. eapply continuous_comp_2; eauto.
+        { apply a. }
+        { eapply sampled_solution_continuous2; eauto. } }
+      { intros. apply H; auto.
+        { eapply sampled_solution_continuous2; eauto. }
+        { apply a. } }
+      { intros. unfold well_formed_samples in H3. destruct H3. destruct H8.
+        specialize (H9 x0). destruct H9. eapply H2; [ apply H4; auto | apply a; eauto ]. } }
+    pose proof (exp_pos (lambda * t0)). psatz R.
+  Qed.
+
   Definition bounded_samples (sample : nat -> R) (T : R) :=
     forall n : nat, sample (S n) - sample n <= T.
 

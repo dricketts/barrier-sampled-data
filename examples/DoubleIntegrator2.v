@@ -351,4 +351,37 @@ Ltac rewrite_R0 :=
     { charge_tauto. }
   Qed.
 
+  Lemma barrier_imp_x_lt_0 :
+    forall stk : state,
+      $[ Barrier [<=] # ((2 * umax * T + 2 * gamma * umax) * T)]
+       |-- exp_inductive state (fun st' st : state => ODE st' st stk)
+       (x [-] # ((2 * umax * T + 2 * gamma * umax) * T)) (d[x] [[-]] ## 0)
+       (-/gamma).
+  Proof.
+    unfold Barrier, Barrier_lin, Barrier_sqr, exp_inductive, ODE. simpl. intros.
+    destruct H0. rewrite H0. rewrite_R0. destruct (Rle_dec (v t0) (umax * gamma)).
+    { smt solve; apply by_z3. }
+    { rewrite Rmult_comm. rewrite <- Ropp_mult_distr_r. rewrite Ropp_mult_distr_l.
+      apply Rle_div_r; [ psatzl R | ]. smt solve; apply by_z3. }
+  Qed.
+
+  Theorem x_lt_0 :
+    forall (sample : nat -> R),
+      well_formed_samples sample ->
+      bounded_samples sample T ->
+      sampled_data ODE sample //\\
+      !(Barrier [<=] #((2*umax*T + 2*gamma*umax) * T)) //\\
+      !(x [-] #((2*umax*T + 2*gamma*umax) * T) [<=] #0)
+      |-- [](x [-] #((2*umax*T + 2*gamma*umax) * T) [<=] #0).
+  Proof.
+    intros. eapply barrier_exp_condition_sampled_weak
+            with (P:=Barrier [<=] #((2*umax*T + 2*gamma*umax) * T)) (lambda:=(-/gamma)); eauto.
+    { apply derive_barrier_minus; [apply derive_barrier_x | apply derive_barrier_pure]. }
+    { auto_continuous_dB. apply continuous_dB_dx. }
+    { charge_tauto. }
+    { apply barrier_imp_x_lt_0. }
+    { rewrite <- barrier_inv; eauto. charge_tauto. }
+    { charge_tauto. }
+  Qed.
+
 End DblInt.
