@@ -165,7 +165,7 @@ Ltac rewrite_R0 :=
         { apply derive_barrier_x. } }
       { auto_derive_barrier.
         { apply derive_barrier_x. }
-        { simpl. intros. smt solve; apply by_z3. }
+        { simpl. intros. psatzl R. }
         { apply derive_barrier_v. }
         { apply derive_barrier_v. }
         { simpl. intros. psatzl R. } }
@@ -248,6 +248,28 @@ Ltac rewrite_R0 :=
       sampled_data ODE sample |--
       intersample_relation_valid2 intersample sample.
   Proof.
+(*    intros. eapply intersample_valid_continuous
+            with (relt:=fun st1 st2 => v (fst st2) <= v (fst st1) + u (fst st1) * snd st2); eauto.
+    { charge_tauto. }
+    { intro.
+      rewrite <- (differential_induction_leq
+                    _ (fun st' st : prod_NormedModule R_AbsRing state R_NormedModule =>
+                         ODE (fst st') (fst st) st0 /\ snd st' = 1) ltrue
+                    (fun st => v (fst st)) (fun st => v st0 + u st0 * snd st)).
+      { simpl. admit. }
+      { instantiate (1:=fun st' st => v (fst st')). admit. }
+      { apply derive_barrier_plus.
+        { apply derive_barrier_pure. }
+        { apply derive_barrier_mult.
+          { apply derive_barrier_pure. }
+          { instantiate (1:=fun st' st => snd st'). admit. } } }
+      { simpl. unfold ODE. intros. destruct H0. destruct H0. destruct H0. rewrite H2.
+        rewrite H3. right. field. } }
+    { simpl. intros. unfold intersample. destruct (Rle_dec 0 (u (fst t))).
+      { psatz R. }
+      { psatz R. } }
+
+*)
     intros. simpl. unfold sampled_data, intersample_relation_valid2.
     intros F Hsol n t Ht. unfold intersample. destruct Hsol as [D [Dcont [DF DFf]]].
     unfold ODE in DFf.
@@ -359,9 +381,11 @@ Ltac rewrite_R0 :=
        (-/gamma).
   Proof.
     unfold Barrier, Barrier_lin, Barrier_sqr, exp_inductive, ODE. simpl. intros.
-    destruct H0. rewrite H0. rewrite_R0. destruct (Rle_dec (v t0) (umax * gamma)).
+    destruct H0. rewrite H0. rewrite_R0. clear - H gamma_gt_0 umax_gt_0 T_gt_0.
+    destruct (Rle_dec (v t0) (umax * gamma)).
     { smt solve; apply by_z3. }
-    { rewrite Rmult_comm. rewrite <- Ropp_mult_distr_r. rewrite Ropp_mult_distr_l.
+    { (*SearchAbout Rle Rge Rlt Rgt Rmult Rplus Ropp Rminus Rinv Rdiv.*)
+      rewrite Rmult_comm. rewrite <- Ropp_mult_distr_r. rewrite Ropp_mult_distr_l.
       apply Rle_div_r; [ psatzl R | ]. smt solve; apply by_z3. }
   Qed.
 

@@ -186,6 +186,58 @@ Section ODE.
     destruct x. simpl in *. psatzl R.
   Qed.
 
+  Definition evolve (dF : FlowProp) (I : StateProp)
+      : state -> state -> Prop :=
+    fun st st' =>
+      exists (r : R) (F : R -> state),
+        0 <= r /\ F 0 = st /\ F r = st' /\
+        (forall t, 0 <= t <= r -> I (F t)) /\
+        (exists (D : R -> state),
+            (forall t : R, is_derive F t (D t)) /\
+            forall t, 0 <= t <= r ->
+                      dF (D t) (F t)).
+
+  Definition box (a : state -> state -> Prop) (s : StateProp) : StateProp :=
+    fun st => forall st', a st st' -> s st'.
+
+  Theorem differential_induction_leq :
+    forall (dF : FlowProp) (I : StateProp)
+           (e1 e2 : StateVal R) (e1' e2' : FlowVal R),
+      (derive_barrier e1 e1') ->
+      (derive_barrier e2 e2') ->
+      dF //\\ $[I] |-- (fun st' st => e1' st' st <= e2' st' st) ->
+      I -->> (e1 [<=] e2)
+                     |-- box (evolve dF I) (e1 [<=] e2).
+  Proof.
+    unfold derive_barrier, box. simpl. intros.
+    destruct H3 as [ r [f [Hr [Hf0 [Hfr [HI [D [HFD1 HFD2] ] ] ] ] ] ] ].
+    apply Rminus_le. assert (I (f 0)).
+    { apply HI; psatzl R. }
+    assert (e2 (f 0) - e1 (f 0) <= e2 (f r) - e1 (f r)).
+    { destruct Hr.
+      { specialize (H f D). specialize (H0 f D).
+        assert (forall t : R_UniformSpace, continuous f t) as Hcont.
+        { intros; apply ex_derive_continuous; eexists; eauto. }
+        eapply derive_increasing_interv_var
+        with (f:=fun t => e2 (f t) - e1 (f t)) (a:=0) (b:=r);
+          try psatzl R. intros. assert (0 <= t0 <= r) by psatzl R.
+        Unshelve.
+        2: (unfold derivable; intros; apply ex_derive_Reals_0;
+            eapply ex_derive_minus
+            with (f0:=fun t => e2 (f t)) (g:=fun t => e1 (f t));
+            eexists; [ apply H0 | apply H ]; intros; auto).
+        rewrite Derive_Reals. rewrite Derive_minus; [ | eexists; eauto | eexists; eauto ].
+        assert (is_derive f t0 (D t0)) as Hderivf by (apply HFD1; assumption).
+        specialize (H Hcont HFD1 t0). specialize (H0 Hcont HFD1 t0).
+        apply is_derive_unique in H; auto. apply is_derive_unique in H0; auto.
+        simpl in *. rewrite H. rewrite H0. specialize (H1 (D t0) (f t0)).
+        assert (dF (D t0) (f t0) /\ I (f t0)).
+        { split; [ apply HFD2 | apply HI ]; psatzl R. }
+        intuition psatzl R. }
+      { subst r. psatzl R. } }
+    { rewrite <- Hfr. rewrite <- Hf0 in *. intuition psatzl R. }
+  Qed.
+
   Lemma exp_integral :
     forall (f df : R -> R) (a : R),
       (forall x, 0 <= x -> continuous df x) ->
@@ -566,7 +618,6 @@ Arguments intersample_relation_valid2 [_] _ _ _.
 Arguments start [_] _ _.
 Arguments always [_] _ _.
 
-(*
 Local Transparent ILInsts.ILFun_Ops.
 Lemma intersample_valid_continuous :
   forall (state : NormedModule R_AbsRing) (G : @TrajectoryProp state)
@@ -574,35 +625,25 @@ Lemma intersample_valid_continuous :
          (sample : nat -> R) (T : R) (f : state -> state -> state -> Prop),
     bounded_samples sample T ->
     G |-- sampled_data f sample ->
-    (forall (st0 : state) (T : R),
-      solution (prod_NormedModule _ state R_NormedModule)%type
-               (fun st' st => snd st < T -> (f (fst st') (fst st) st0 /\ (snd st') = 1))
-      |-- always (fun st => snd st < T -> relt (st0,0) st)) ->
-    relt //\\ (fun st1 st2 => (snd st2) <= T) |-- (fun st1 st2 => rel (fst st1) (fst st2)) ->
+    (forall st0 : state,
+        |-- box _ (evolve (prod_NormedModule _ state R_NormedModule)
+                          (fun st' st => f (fst st') (fst st) st0 /\ (snd st') = 1) ltrue)
+                  (fun st => relt (st0,0) st)) ->
+    relt //\\ (fun st1 st2 => 0 <= (snd st2) <= T) |-- (fun st1 st2 => rel (fst st1) (fst st2)) ->
     G |-- intersample_relation_valid2 rel sample.
 Proof.
-  simpl. intros. specialize (H0 _ H3). rename t into F.
-  unfold intersample_relation_valid2. intros.
-  unfold sampled_data, always in *.
-  apply (H2 (F (sample n), 0) (F t, t - sample n)).
-  split.
-  { specialize (H1 (F (sample n)) (sample (S n) - sample n) (fun r => (F (r + sample n), r))).
-    match type of H1 with
-    | ?e -> _ => assert e as Hsol
-    end.
-    { unfold solution. destruct H0 as [D [Dcont [DF Df]]]. exists (fun x => (D (x + sample n), 1)).
-      split.
-      { admit. }
-      { intros. split.
-        { admit. }
-        { intros. split.
-          { apply Df. simpl in *. psatzl R. }
-          { reflexivity. } } } }
-    specialize (H1 Hsol (t - sample n)). simpl in *.
-    replace (t - sample n + sample n) with t in H1 by psatzl R.
-    apply H1.
+  unfold intersample_relation_valid2. simpl. intros. specialize (H0 _ H3). rename t into F.
+  apply (H2 (F (sample n), 0) (F t0, t0 - sample n)). split.
+  { apply (H1 (F (sample n)) (F (sample n), 0)); auto.
+    unfold evolve. exists (t0 - sample n). exists (fun r => (F (r + sample n), r)).
+    repeat split.
     { psatzl R. }
-    { unfold bounded_samples in *. specialize (H n). psatzl R. } }
+    { rewrite Rplus_0_l. reflexivity. }
+    { replace (t0 - sample n + sample n) with t0 by field. reflexivity. }
+    { destruct H0 as [D H0]. exists (fun x => (D (x + sample n), 1)). split.
+      { intros. admit. }
+      { intros. split.
+        { simpl. apply H0. psatzl R. }
+        { reflexivity. } } } }
   { simpl. unfold bounded_samples in *. specialize (H n). psatzl R. }
 Admitted.
-*)

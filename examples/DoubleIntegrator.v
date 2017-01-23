@@ -145,7 +145,7 @@ Ltac rewrite_R0 :=
         { apply derive_barrier_v. }
         { apply derive_barrier_x. } }
       { simpl. intros. destruct t. destruct t0. simpl in *.
-        rewrite_R0. unfold Rdiv at 2. rewrite_R0. subst r1.
+        rewrite_R0. unfold Rdiv at 2. rewrite_R0.
         admit. }
       { admit. }
       { intros. apply continuous_fst. } }
@@ -223,22 +223,16 @@ Ltac rewrite_R0 :=
 *)
 
   (* The intersample relation is a valid characterization of intersample behavior. *)
+(*
   Lemma intersample_valid :
-    forall (F : trajectory _) (sample : R -> R),
+    forall (F : trajectory _) (sample : nat -> R),
       solution_sampled_data ODE F sample ->
       bounded_samples sample T ->
       intersample_relation_valid intersample sample F.
   Proof.
     unfold intersample_relation_valid. intros.
   Admitted.
-
-Goal forall (a x1 x2 y1 y2 y3 : R), x1 > 0 -> y1 > 0 ->
-   y1 <= y3 ->
-   a + x1 * y3 <= x2 * y2 ->
-   a + x1 * y1 <= x2 * y2.
-Proof.
-  intros. rewrite H1; auto.
-Qed.
+*)
 
   (* The "inductive" condition on the barrier function, i.e. its derivative
      is proportional to its value. *)
@@ -254,14 +248,11 @@ Qed.
       rewrite H1. rewrite H2 at 1; auto. rewrite <- Ropp_mult_distr_l.
       apply Ropp_le_cancel. do 2 rewrite Ropp_mult_distr_l.
       rewrite H2; try psatzl R. rewrite H; try psatzl R.
-      rewrie
- rewrite H2 at 1; auto. rewrite <- H2.
-
-Print Instances Morphisms.Proper.
-
-rewrite H2 at 1.
+      admit. admit. }
+  Admitted.
 
   (* Invariance of the barrier region. *)
+(*
   Theorem barrier_inv :
     forall (F : trajectory _) (sample : R -> R),
       solution_sampled_data ODE F sample ->
@@ -271,8 +262,9 @@ rewrite H2 at 1.
     intros. eapply barrier_exp_condition_sampled; eauto.
     { apply dBarrier_valid. }
     { apply continuous_dBarrier. }
-    { apply intersample_valid; assumption. }
+    { admit. }
     { apply Barrier_inductive. }
   Qed.
+*)
 
 End DblInt.

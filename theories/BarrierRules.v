@@ -313,3 +313,52 @@ Ltac auto_continuous_dB :=
          | [ |- continuous_dB _ (_ [*] _) ] => apply continuous_dB_mult
          | [ |- continuous_dB _ ([sqrt] _) ] => apply continuous_dB_sqrt
          end.
+
+Lemma is_derive_fst :
+  forall (T U : NormedModule R_AbsRing) (F : trajectory (prod_NormedModule _ T U)) D,
+    (forall t : R, is_derive F t (D t)) ->
+    forall t, is_derive (fun t : R => fst (F t)) t (fst (D t)).
+Proof.
+  intros. eapply filterdiff_ext_lin.
+  { apply (filterdiff_comp' F).
+    { apply H. }
+    { instantiate (1:=fst). split.
+      { apply is_linear_fst. }
+      { intros. unfold locally. intro. exists eps.
+        intros. destruct y. destruct x. simpl. unfold minus at 2.
+        rewrite minus_eq_zero. rewrite norm_zero. rewrite <- norm_ge_0.
+        psatz R. destruct eps. simpl. psatzl R. } } }
+  { simpl. intros. reflexivity. }
+Qed.
+(*
+Lemma derive_barrier_fst_R :
+  forall (U : NormedModule R_AbsRing) (G : StateProp (prod_NormedModule _ R_NormedModule U)),
+    derive_barrier_dom G fst (d[fst]).
+Proof.
+  unfold derive_barrier_dom. simpl. intros.
+  apply is_derive_fst; auto.
+Qed.
+Lemma is_derive_snd :
+  forall (T U : NormedModule R_AbsRing) (F : trajectory (prod_NormedModule _ T U)) D,
+    (forall t : R, is_derive F t (D t)) ->
+    forall t, is_derive (fun t : R => snd (F t)) t (snd (D t)).
+Proof.
+  intros. eapply filterdiff_ext_lin.
+  { apply (filterdiff_comp' F).
+    { apply H. }
+    { instantiate (1:=snd). split.
+      { apply is_linear_snd. }
+      { intros. unfold locally. intro. exists eps.
+        intros. destruct y. destruct x. simpl. unfold minus at 2.
+        rewrite minus_eq_zero. rewrite norm_zero. rewrite <- norm_ge_0.
+        psatz R. destruct eps. simpl. psatzl R. } } }
+  { simpl. intros. reflexivity. }
+Qed.
+Lemma derive_barrier_snd_R :
+  forall (U : NormedModule R_AbsRing) (G : StateProp (prod_NormedModule _ U R_NormedModule)),
+    derive_barrier_dom G snd (d[snd]).
+Proof.
+  unfold derive_barrier_dom. simpl. intros.
+  apply is_derive_snd; auto.
+Qed.
+*)
