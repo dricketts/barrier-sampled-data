@@ -66,4 +66,7 @@ Notation "c ??<= x [?] e1 [:] e2" :=
 Notation "'d[' x ']'" := (fun st' st => x st') (at level 20).
 Notation "'$[' e ']'" := (fun _ st => e st) (at level 20).
 
+Notation "[] P" := (always P) (at level 70).
+Notation "! P" := (start P) (at level 70).
+
 Export ExtLib.Structures.Applicative.

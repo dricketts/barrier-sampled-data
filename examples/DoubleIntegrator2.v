@@ -2,6 +2,7 @@ Require Import Coq.Reals.Reals.
 Require Import Coquelicot.Coquelicot.
 Require Import Coq.micromega.Psatz.
 Require Import ChargeCore.Logics.ILogic.
+Require Import ChargeCore.Tactics.Tactics.
 Require Import Control.Arithmetic.
 Require Import Control.Barrier.
 Require Import Control.Syntax.
@@ -73,14 +74,15 @@ Section DblInt.
   Definition dBarrier : dbarrier state :=
     $[v] ??<= umax*gamma [?] dBarrier_lin [:] dBarrier_sqr.
 
-  Lemma derive_barrier_x :
-    forall (G : StateProp state),
-      derive_barrier_dom G x (d[x]).
+
+  Lemma is_derive_x :
+    forall F D,
+    (forall t : R, is_derive F t (D t)) ->
+    forall t, is_derive (fun t : R => x (F t)) t (x (D t)).
   Proof.
-    unfold derive_barrier_dom. simpl. intros.
-    eapply filterdiff_ext_lin.
+    intros. eapply filterdiff_ext_lin.
     { apply (filterdiff_comp' F x).
-      { apply H0. }
+      { apply H. }
       { instantiate (1:=x). unfold x. unfold filterdiff.
         simpl. split.
         { apply is_linear_fst. }
@@ -92,20 +94,27 @@ Section DblInt.
           |- abs ?e <= _ => replace e with 0 by field
           end.
           pose proof (@abs_zero R_AbsRing). unfold zero in *.
-          simpl in *. rewrite H4. erewrite <- Rmult_0_r.
+          simpl in *. rewrite H2. erewrite <- Rmult_0_r.
           apply Rmult_le_compat_l.
           { destruct eps. simpl. psatzl R. }
           { apply sqrt_pos. } } } }
     { simpl. intros. reflexivity. }
   Qed.
-  Lemma derive_barrier_v :
+  Lemma derive_barrier_x :
     forall (G : StateProp state),
-      derive_barrier_dom G v (d[v]).
+      derive_barrier_dom G x (d[x]).
   Proof.
     unfold derive_barrier_dom. simpl. intros.
-    eapply filterdiff_ext_lin.
+    apply is_derive_x; auto.
+  Qed.
+  Lemma is_derive_v :
+    forall F D,
+    (forall t : R, is_derive F t (D t)) ->
+    forall t, is_derive (fun t : R => v (F t)) t (v (D t)).
+  Proof.
+    intros. eapply filterdiff_ext_lin.
     { apply (filterdiff_comp' F v).
-      { apply H0. }
+      { apply H. }
       { instantiate (1:=v). unfold v. unfold filterdiff.
         simpl. split.
         { apply is_linear_snd. }
@@ -117,11 +126,18 @@ Section DblInt.
           |- abs ?e <= _ => replace e with 0 by field
           end.
           pose proof (@abs_zero R_AbsRing). unfold zero in *.
-          simpl in *. rewrite H4. erewrite <- Rmult_0_r.
+          simpl in *. rewrite H2. erewrite <- Rmult_0_r.
           apply Rmult_le_compat_l.
           { destruct eps. simpl. psatzl R. }
           { apply sqrt_pos. } } } }
     { simpl. intros. reflexivity. }
+  Qed.
+  Lemma derive_barrier_v :
+    forall (G : StateProp state),
+      derive_barrier_dom G v (d[v]).
+  Proof.
+    unfold derive_barrier_dom. simpl. intros.
+    apply is_derive_v; auto.
   Qed.
 
 Ltac breakAbstraction :=
@@ -225,21 +241,30 @@ Ltac rewrite_R0 :=
     then v st <= v smpl + u smpl * T
     else v st <= v smpl.
 
-(*
-  Lemma intersample_valid_aux :
-    forall (F : trajectory state),
-      solution _ (fun st' st _ => ODE st' st (F 0)) F ->
-      forall t, v (F t) = v (F 0) * t.
-*)
-
   (* The intersample relation is a valid characterization of intersample behavior. *)
   Lemma intersample_valid :
-    forall (F : trajectory _) (sample : nat -> R),
-      solution_sampled_data2 _ ODE F sample ->
-      bounded_samples2 sample T ->
-      intersample_relation_valid2 _ intersample sample F.
+    forall (sample : nat -> R),
+      bounded_samples sample T ->
+      sampled_data ODE sample |--
+      intersample_relation_valid2 intersample sample.
   Proof.
-  Admitted.
+    intros. simpl. unfold sampled_data, intersample_relation_valid2.
+    intros F Hsol n t Ht. unfold intersample. destruct Hsol as [D [Dcont [DF DFf]]].
+    unfold ODE in DFf.
+    assert (forall t,
+               sample n <= t < sample (S n) ->
+               is_derive (fun t => v (F t)) t (u (F (sample n)))) as Hderive.
+    { intros. specialize (DFf n t0 H0). destruct DFf. rewrite <- H2. apply is_derive_v; auto. }
+    assert (is_RInt (fun _ => (u (F (sample n)))) (sample n) t (v (F t) - v (F (sample n)))) as HRInt.
+    { apply is_RInt_derive with (f:=fun t => v (F t)).
+      { intros. apply Hderive. rewrite Rmin_left in H0 by psatzl R.
+        rewrite Rmax_right in H0 by psatzl R. psatzl R. }
+      { intros. apply continuous_const. } }
+    apply is_RInt_unique in HRInt. rewrite RInt_const in HRInt.
+    destruct (Rle_dec 0 (u (F (sample n)))).
+    { specialize (H n). psatz R. }
+    { psatz R. }
+  Qed.
 
   Lemma intersample_derive_bound :
     forall st' stk' st stk : state,
@@ -288,14 +313,13 @@ Ltac rewrite_R0 :=
           rewrite H; auto. right. field. psatzl R. } } }
   Qed.
 
-
   (* The "inductive" condition on the barrier function, i.e. its derivative
      is proportional to its value. *)
   Lemma Barrier_inductive :
-      exp_condition2 _ Barrier dBarrier ODE (-1/T).
+      |-- exp_condition2 _ Barrier dBarrier ODE (-1/T).
   Proof.
     unfold exp_condition2, Barrier, dBarrier, ODE.
-    simpl. intros. destruct H. specialize (u_barrier_constraint xk).
+    simpl. intros x xk Blah H. destruct H. specialize (u_barrier_constraint xk).
     destruct (Rle_dec (v xk) (umax * gamma)).
     { unfold dBarrier_lin, Barrier_lin. simpl. rewrite H. rewrite H0.
       rewrite u_barrier_constraint; try psatzl R. right. field. psatzl R. }
@@ -308,20 +332,23 @@ Ltac rewrite_R0 :=
 
   (* Invariance of the barrier region. *)
   Theorem barrier_inv :
-    forall (F : trajectory _) (sample : nat -> R),
-      solution_sampled_data2 _ ODE F sample ->
+    forall (sample : nat -> R),
       well_formed_samples sample ->
-      bounded_samples2 sample T ->
-      forall t : R, Barrier (F 0) <= (2*umax*T + 2*gamma*umax) * T ->
-                    Barrier (F t) <= (2*umax*T + 2*gamma*umax) * T.
+      bounded_samples sample T ->
+      sampled_data ODE sample //\\
+      !(Barrier [<=] #((2*umax*T + 2*gamma*umax) * T))
+      |-- [](Barrier [<=] #((2*umax*T + 2*gamma*umax) * T)).
   Proof.
-    intros. eapply barrier_exp_condition_sampled2; eauto.
+    intros. eapply barrier_exp_condition_sampled2 with (P:=ltrue); eauto.
     { apply dBarrier_valid. }
     { apply continuous_dBarrier. }
-    { apply intersample_valid; assumption. }
-    { apply Barrier_inductive. }
+    { charge_tauto. }
+    { rewrite intersample_valid; [ charge_tauto | assumption ]. }
+    { rewrite <- Barrier_inductive. charge_tauto. }
     { apply intersample_derive_bound. }
     { psatz R. }
+    { unfold always. simpl. auto. }
+    { charge_tauto. }
   Qed.
 
 End DblInt.

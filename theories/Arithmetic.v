@@ -32,6 +32,57 @@ Proof.
   intros. smt solve; apply by_z3.
 Qed.
 
+Require Import Coquelicot.Coquelicot.
+Require Import Coq.Logic.Classical_Prop.
+Lemma reals_dense :
+  forall (x y : R),
+    x < y ->
+    exists z : R, x < z < y.
+Proof.
+  intros x y Hxy.
+  pose proof (archimed (1/(y - x))).
+  destruct H. clear H0.
+  generalize dependent (IZR (up (1 / (y - x)))). intros n H.
+  pose proof (archimed (n * x)). destruct H0.
+  generalize dependent (IZR (up (n * x))). intros m H0 H1.
+  exists (m / n).
+  assert ((y - x) * / (y - x) = 1) by (apply Rinv_r; psatzl R).
+  assert ((y - x) * n > 1).
+  { unfold Rdiv in *. rewrite Rmult_1_l in *. psatz R. }
+  cut (n * x < m < n * y).
+  { assert (n * / n = 1) by (apply Rinv_r; psatz R).
+    intros. unfold Rdiv. generalize dependent (/n). intros.
+    assert (n > 0) by psatz R.
+    clear - H4 H5 H6. split; psatz R. }
+  { psatz R. }
+Qed.
+Lemma closed_continuous :
+  forall {T : UniformSpace} (D : T -> Prop),
+    closed D ->
+    forall (f : R -> T) (u l : R),
+      l < u ->
+      (forall r, l <= r < u -> D (f r)) ->
+      continuous f u ->
+      D (f u).
+Proof.
+  intros. apply NNPP; intro.
+  unfold closed, open, continuous, locally, filterlim,
+  filter_le, filtermap in *.
+  specialize (H _ H3). specialize (H2 _ H).
+  simpl in *. destruct H2 as [eps H2].
+  cbv beta iota zeta delta - [ not abs ] in H2.
+  destruct (reals_dense (Rmax l (u - eps)) u).
+  { destruct eps. simpl. unfold Rmax.
+    destruct (Rle_dec l (u - pos)); psatzl R. }
+  apply H2 with (y:=x) in H1; auto.
+  { destruct eps. simpl in *. compute.
+    destruct (Rcase_abs (x + - u)); try psatzl R.
+    assert (u - pos < x).
+    { revert H4. unfold Rmax. destruct (Rle_dec l (u - pos)); psatzl R. }
+    psatzl R. }
+  { revert H4. apply Rmax_case_strong; intros; psatzl R. }
+Qed.
+
 Require Import Coq.Classes.RelationClasses.
 Require Import Setoid Relation_Definitions.
 Require Import Coq.Classes.Morphisms.
