@@ -1,5 +1,4 @@
 Require Import Coq.Reals.Reals.
-Require Import Why3.
 Require Import Coq.micromega.Psatz.
 Require Import SMTC.Tactic.
 
@@ -34,6 +33,18 @@ Qed.
 
 Require Import Coquelicot.Coquelicot.
 Require Import Coq.Logic.Classical_Prop.
+
+Ltac breakAbstraction :=
+  cbv beta iota delta - [Rle Rge abs Rabs].
+
+Ltac rewrite_R0 :=
+  repeat first [ rewrite Rmult_0_l
+               | rewrite Rmult_0_r
+               | rewrite Rplus_0_r
+               | rewrite Rplus_0_l
+               | rewrite Rminus_0_r 
+               | rewrite Rminus_0_l ].
+
 Lemma reals_dense :
   forall (x y : R),
     x < y ->
