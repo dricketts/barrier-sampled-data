@@ -1,0 +1,12 @@
+-Q theories Control
+-Q examples Examples
+-R /usr/local/lib/why3/coq-tactic/ Why3
+-R /usr/local/lib/why3/coq/ Why3
+
+./theories/Arithmetic.v
+./theories/Barrier.v
+./theories/Syntax.v
+./theories/BarrierRules.v
+
+./examples/DoubleIntegrator.v
+./examples/DoubleIntegrator2.v
