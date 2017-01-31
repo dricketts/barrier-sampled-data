@@ -330,7 +330,6 @@ Proof.
         psatz R. destruct eps. simpl. psatzl R. } } }
   { simpl. intros. reflexivity. }
 Qed.
-(*
 Lemma derive_barrier_fst_R :
   forall (U : NormedModule R_AbsRing) (G : StateProp (prod_NormedModule _ R_NormedModule U)),
     derive_barrier_dom G fst (d[fst]).
@@ -361,4 +360,46 @@ Proof.
   unfold derive_barrier_dom. simpl. intros.
   apply is_derive_snd; auto.
 Qed.
-*)
+
+Lemma continuous_dB_fst :
+  forall (U : NormedModule R_AbsRing) (G : FlowProp (prod_NormedModule _ R_NormedModule U)),
+    continuous_dB G ($[fst]).
+Proof.
+  unfold continuous_dB. simpl. intros.
+  apply continuous_comp.
+  { apply continuous_snd. }
+  { apply continuous_fst. }
+Qed.
+Lemma continuous_dB_snd :
+  forall (U : NormedModule R_AbsRing) (G : FlowProp (prod_NormedModule _ U R_NormedModule)),
+    continuous_dB G ($[snd]).
+Proof.
+  unfold continuous_dB. simpl. intros.
+  apply continuous_comp.
+  { apply continuous_snd. }
+  { apply continuous_snd. }
+Qed.
+Lemma continuous_dB_dfst :
+  forall (U : NormedModule R_AbsRing) (G : FlowProp (prod_NormedModule _ R_NormedModule U)),
+    continuous_dB G (d[fst]).
+Proof.
+  unfold continuous_dB. simpl. intros.
+  apply continuous_comp.
+  { apply continuous_fst. }
+  { apply continuous_fst. }
+Qed.
+Lemma continuous_dB_dsnd :
+  forall (U : NormedModule R_AbsRing) (G : FlowProp (prod_NormedModule _ U R_NormedModule)),
+    continuous_dB G (d[snd]).
+Proof.
+  unfold continuous_dB. simpl. intros.
+  apply continuous_comp.
+  { apply continuous_fst. }
+  { apply continuous_snd. }
+Qed.
+
+Ltac continuous_dB_vars :=
+  apply continuous_dB_fst ||
+  apply continuous_dB_dfst ||
+  apply continuous_dB_snd ||
+  apply continuous_dB_dsnd.

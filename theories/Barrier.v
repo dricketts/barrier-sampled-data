@@ -93,7 +93,6 @@ Section ODE.
   Notation "'d[' x ']'" := (fun st' st => x st') (at level 20).
   Notation "'$[' e ']'" := (fun _ st => e st) (at level 20).
 
-
   Export ExtLib.Structures.Applicative.
 
   (* A barrier function maps states to scalars. *)
@@ -163,6 +162,7 @@ Section ODE.
     exists (x t). tauto.
   Qed.
 
+(*
   (* The least upper bound of a closed set is contained in the set. *)
   Lemma lub_closed_in_set :
     forall (S : R -> Prop) (m : R),
@@ -185,6 +185,7 @@ Section ODE.
     { apply H0; auto. }
     destruct x. simpl in *. psatzl R.
   Qed.
+*)
 
   Definition evolve (dF : FlowProp) (I : StateProp)
       : state -> state -> Prop :=
@@ -605,6 +606,116 @@ Section ODE.
         { intros. apply H11. } } }
   Qed.
 
+  Definition exp_condition3 (B : barrier) (dB : dbarrier)
+             (f : state -> state -> state -> Prop)
+             (lambda : R) : FlowProp :=
+     (fun x' x => f x' x x) -->> dB [<=]
+                            @liftA2  _ (Applicative_FlowVal) _ _ _ Rmax ($[#lambda [*] B]) (#0).
+
+  Require Import Control.Arithmetic.
+  Theorem barrier_exp_condition_sampled3 :
+    forall (B : barrier) (dB : dbarrier),
+      derive_barrier B dB ->
+      continuous_dB ltrue dB ->
+      forall (f : state -> state -> state -> Prop)
+             (sample : nat -> R) (rel : state -> state -> Prop)
+             (C : R) (T : R) (G : TrajectoryProp) (P : StateProp),
+        G |-- sampled_data f sample ->
+        G |-- intersample_relation_valid2 rel sample ->
+        $[P] |-- exp_condition2 B dB f (-1/T) ->
+        (forall (x' xk' x xk : state),
+            rel xk x -> f x' x xk -> f xk' xk xk -> dB x' x <= Rmax (dB xk' xk + C) 0) ->
+        well_formed_samples sample ->
+        bounded_samples sample T ->
+        forall (HC : C > 0) (HT : T > 0),
+        G |-- []P ->
+        G |-- !(B [<=] #(C * T)) ->
+        G |-- [](B [<=] #(C * T)).
+  Proof.
+    unfold start, always. simpl. intros. rename t into F.
+    specialize (H1 _ H9). specialize (H2 _ H9).
+    specialize (H7 _ H9). specialize (H8 _ H9).
+    pose proof H1 as Hsol. destruct H1 as [D [? ?]].
+    assert (Derive (fun t => B (F t)) = fun t : R => dB (D t) (F t))
+           as HDerive.
+    { apply functional_extensionality. intros. apply is_derive_unique.
+      apply H; auto.
+      { eapply sampled_solution_continuous2; eauto. }
+      { tauto. } }
+    assert (forall x, continuous (fun t0 : R => dB (D t0) (F t0)) x).
+    { intros. eapply continuous_comp_2 in H0.
+      { apply H0. }
+      { auto. }
+      { eapply sampled_solution_continuous2; eauto. }
+      { exact I. } }
+    assert (forall n t,
+               B (F t) = B (F (sample n)) +
+                         RInt (fun t => dB (D t) (F t)) (sample n) t)
+      as HRInt1.
+    { intros. rewrite <- HDerive. rewrite RInt_Derive.
+      { field. }
+      { intros. unfold ex_derive. eexists; apply H; auto.
+        { intros. eapply sampled_solution_continuous2; eauto. }
+        { intros. apply H11. } }
+      { intros. rewrite HDerive. auto. } }
+    assert (forall n t,
+               is_RInt (fun _ => Rmax ((-1/T)*(B (F (sample n))) + C) 0) (sample n) t
+                       ((t - sample n) * Rmax ((-1/T)*(B (F (sample n))) + C) 0)) as HRInt_val.
+    { intros. apply (is_RInt_const (sample n) t (Rmax ((-1/T)*(B (F (sample n))) + C) 0)). }
+    assert (forall n t,
+               sample n <= t < sample (S n) ->
+               B (F t) <= B (F (sample n)) +
+                          RInt (fun _ => Rmax ((-1/T)*(B (F (sample n))) + C) 0) (sample n) t)
+      as RInt2.
+    { intros. erewrite HRInt1. apply Rplus_le_compat_l.
+      apply RInt_le.
+      { tauto. }
+      { eexists. apply is_RInt_derive.
+        { intros. apply H; auto.
+          { intros. eapply sampled_solution_continuous2; eauto. }
+          { intros. apply H11. } }
+        { auto. } }
+      { unfold ex_RInt. eexists; eauto. }
+      { intros. rewrite H4.
+        { apply Rle_max_compat_r. apply Rplus_le_compat_r. eapply H3.
+          { apply H7. apply well_formed_sample_ge_0; auto. }
+          { apply H11. psatzl R. } }
+        { apply H2. psatzl R. }
+        { apply H11. psatzl R. }
+        { apply H11. psatzl R. } } }
+    assert (forall n,
+               B (F (sample n)) <= C*T ->
+               forall t,
+                 sample n <= t < sample (S n) ->
+                 B (F t) <= C*T) as HCT.
+    { intros ? ? ? Hsmpl. specialize (RInt2 _ _ Hsmpl).
+      erewrite is_RInt_unique in RInt2; eauto.
+      assert (0 <= t - sample n) by psatzl R.
+      assert (t - sample n <= T).
+      { unfold bounded_samples in *. specialize (H6 n).
+        psatzl R. }
+      rewrite RInt2. unfold Rmax. destruct (Rle_dec (-1 / T * B (F (sample n)) + C) 0).
+      { psatzl R. }
+      { destruct (Rle_dec ((-1/T) * B (F (sample n)) + C) 0).
+        { rewrite H13 at 1. psatz R. }
+        { etransitivity.
+          { apply Rplus_le_compat_l. apply Rmult_le_compat; try psatzl R; eauto.
+            reflexivity. }
+          { field_simplify; psatzl R. } } } }
+    destruct H5. destruct H13. specialize (H14 t0). destruct H14 as [n Hn].
+    eapply HCT; eauto. clear Hn. induction n.
+    { congruence. }
+    { specialize (HCT n IHn). eapply closed_continuous with (f0:=fun t => B (F t)).
+      { unfold closed. eapply open_ext. 2: apply open_gt. intros.
+        simpl. instantiate (1:=C * T). psatzl R. }
+      { instantiate (1:=sample n). auto. }
+      { auto. }
+      { apply ex_derive_continuous with (f0:=fun t => B (F t)).
+        eexists. apply H; auto.
+        { eapply sampled_solution_continuous2; eauto. }
+        { intros. apply H11. } } }
+  Qed.
+
 End ODE.
 
 Arguments derive_barrier [_] _ _.
@@ -618,6 +729,7 @@ Arguments intersample_relation_valid2 [_] _ _ _.
 Arguments start [_] _ _.
 Arguments always [_] _ _.
 
+(*
 Local Transparent ILInsts.ILFun_Ops.
 Lemma intersample_valid_continuous :
   forall (state : NormedModule R_AbsRing) (G : @TrajectoryProp state)
@@ -647,3 +759,4 @@ Proof.
         { reflexivity. } } } }
   { simpl. unfold bounded_samples in *. specialize (H n). psatzl R. }
 Admitted.
+*)
