@@ -174,3 +174,17 @@ Proof.
   apply Rplus_le_compat;
     [assumption | apply Ropp_le_contravar ; assumption].
 Qed.
+
+Global Instance Proper_Rplus_Rge :
+  Proper (Rge ==> Rge ==> Rge) Rplus.
+Proof.
+  red. red. red. intros. apply Rplus_ge_compat ; assumption.
+Qed.
+
+Global Instance Proper_Rminus_Rge :
+  Proper (Rge ==> Rge --> Rge) Rminus.
+Proof.
+  red. red. red. intros. unfold Rminus.
+  apply Rplus_ge_compat;
+    [assumption | apply Ropp_ge_contravar ; assumption].
+Qed.

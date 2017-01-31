@@ -44,11 +44,12 @@ Section DblInt.
   Hypothesis gamma_gt_0 : gamma > 0.
 
   (* Upper bound on u to enforce barrier invariance. *)
+  Definition u_ub (st : state) :=
+    if Rle_dec (v st) (umax * gamma)
+    then (-1 / T * (gamma * v st + x st) - v st)/gamma
+    else umax*(-1/T * (x st + umax * gamma * gamma/2 + v st * v st / (2 * umax)) - v st)/v st.
   Hypothesis u_barrier_constraint : forall st,
-      u st <=
-      if Rle_dec (v st) (umax * gamma)
-      then (-1 / T * (gamma * v st + x st) - v st)/gamma
-      else umax*(-1/T * (x st + umax * gamma * gamma/2 + v st * v st / (2 * umax)) - v st)/v st.
+      u st <= u_ub st.
 
   (* A relationship between the various parameters to ensure
      that a control satisfying all constraints exists. *)
@@ -67,6 +68,51 @@ Section DblInt.
     (#gamma[*]v) [+] x.
   Definition Barrier : barrier state :=
     v ?<= umax*gamma [?] Barrier_lin [:] Barrier_sqr.
+
+  Definition violation := 2 * umax * T.
+  Lemma zero_le_violation : 0 <= violation.
+  Proof.
+    unfold violation. psatz R.
+  Qed.
+
+  Lemma exists_input :
+    forall st, Barrier st <= violation * T ->
+                 -umin <= u_ub st.
+  Proof.
+    unfold Barrier, violation, u_ub. intros. destruct st as [X V]. simpl in *.
+    assert (/gamma > 0) as gamma_inv by (apply Rlt_gt; apply Rinv_0_lt_compat; psatzl R).
+    assert (/T > 0) as T_inv by (apply Rlt_gt; apply Rinv_0_lt_compat; psatzl R).
+    destruct (Rle_dec V (umax * gamma)).
+    { unfold Barrier_lin in *. simpl in *.
+      transitivity ((-1 / T * 2 * umax * T * T - V) / gamma).
+      { unfold Rdiv. rewrite r by psatzl R. field_simplify; try psatzl R.
+        assert (-umin / (1 + 2 * T / gamma) <= -umax) by psatzl R.
+        unfold Rdiv. unfold Rminus. replace (-2 * T * umax) with (2 * T * -umax) by field.
+        replace (- (umax * gamma)) with (-umax * gamma) by field.
+        rewrite <- H0 by psatzl R. right. field. psatzl R. }
+      { unfold Rdiv. apply Rmult_le_compat_r; try psatzl R. apply Rplus_le_compat_r.
+        repeat rewrite Rmult_assoc. apply Rmult_le_compat_neg_l; [ psatzl R | ].
+        apply Rmult_le_compat_l; psatzl R. } }
+    { unfold Barrier_sqr in *. simpl in *.
+      assert (0 <= / V) as V_inv by (left; apply Rlt_gt; apply Rinv_0_lt_compat; psatz R).
+      transitivity (umax * (-1 / T * 2 * umax * T * T - V) / V).
+      { replace (umax * (-1 / T * 2 * umax * T * T - V) / V)
+        with (2 * (- umax) * umax * T * / V + - umax) by (field; psatz R).
+        assert (-umin / (1 + 2 * T / gamma) <= -umax) by psatzl R.
+        rewrite <- H0; try psatzl R.
+        { replace (2 * (- umin / (1 + 2 * T / gamma)) * umax * T * / V)
+          with (2 * (umin / (1 + 2 * T / gamma)) * umax * T * (/ -V)) by (field; psatz R).
+          assert (/( - umax * gamma) <= / - V).
+          { left. apply Rinv_lt_contravar.
+            { ring_simplify. repeat apply Rmult_lt_0_compat; psatz R. }
+            { psatzl R. } }
+          rewrite <- H1.
+          { right. field. psatz R. }
+          { apply Rle_ge. left. repeat (apply Rmult_lt_0_compat; [ | psatzl R]). psatzl R. } } }
+      { apply Rmult_le_compat_r; auto. apply Rmult_le_compat_l; [ psatzl R | ].
+        apply Rplus_le_compat_r. repeat rewrite Rmult_assoc.
+        apply Rmult_le_compat_neg_l; psatzl R. } }
+  Qed.
 
   (* Derivative of the barrier function. *)
   (* x' + v*v'/umaxc *)
@@ -149,12 +195,6 @@ Section DblInt.
       specialize (H n); psatz R.
   Qed.
 
-  Definition violation := 2 * umax * T.
-  Lemma zero_le_violation : 0 <= violation.
-  Proof.
-    unfold violation. psatz R.
-  Qed.
-
   Lemma intersample_derive_bound :
     forall st' stk' st stk : state,
       intersample stk st ->
@@ -229,7 +269,7 @@ Section DblInt.
   Lemma Barrier_inductive :
       |-- exp_condition2 _ Barrier dBarrier ODE (-1/T).
   Proof.
-    unfold exp_condition2, Barrier, dBarrier, ODE.
+    unfold exp_condition2, Barrier, dBarrier, ODE, u_ub in *.
     simpl. intros x xk Blah H. destruct H. specialize (u_barrier_constraint xk).
     destruct (Rle_dec (v xk) (umax * gamma)).
     { unfold dBarrier_lin, Barrier_lin. simpl. rewrite H. rewrite H0.
