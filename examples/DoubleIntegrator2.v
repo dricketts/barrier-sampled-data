@@ -42,8 +42,6 @@ Section DblInt.
   (* Some design parameters of the control constraints. *)
   Variable gamma : R.
   Hypothesis gamma_gt_0 : gamma > 0.
-  Variable alpha : R.
-  Hypothesis alpha_gt_0 : alpha > 0.
 
   (* Upper bound on u to enforce barrier invariance. *)
   Hypothesis u_barrier_constraint : forall st,
@@ -51,6 +49,10 @@ Section DblInt.
       if Rle_dec (v st) (umax * gamma)
       then (-1 / T * (gamma * v st + x st) - v st)/gamma
       else umax*(-1/T * (x st + umax * gamma * gamma/2 + v st * v st / (2 * umax)) - v st)/v st.
+
+  (* A relationship between the various parameters to ensure
+     that a control satisfying all constraints exists. *)
+  Hypothesis umax_le_f_umin : umax <= umin/(1 + 2 * T/gamma).
 
   (* The sampled data evolution of the system, x' = v, v' = u *)
   Definition ODE (st' st smpl : state) : Prop :=
