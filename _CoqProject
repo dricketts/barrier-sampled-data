@@ -7,4 +7,3 @@
 ./theories/BarrierRules.v
 
 ./examples/DoubleIntegrator.v
-./examples/DoubleIntegrator2.v

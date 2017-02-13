@@ -728,35 +728,3 @@ Arguments sampled_data [_] _ _ _.
 Arguments intersample_relation_valid2 [_] _ _ _.
 Arguments start [_] _ _.
 Arguments always [_] _ _.
-
-(*
-Local Transparent ILInsts.ILFun_Ops.
-Lemma intersample_valid_continuous :
-  forall (state : NormedModule R_AbsRing) (G : @TrajectoryProp state)
-         (rel : state -> state -> Prop) (relt : state * R -> state * R -> Prop)
-         (sample : nat -> R) (T : R) (f : state -> state -> state -> Prop),
-    bounded_samples sample T ->
-    G |-- sampled_data f sample ->
-    (forall st0 : state,
-        |-- box _ (evolve (prod_NormedModule _ state R_NormedModule)
-                          (fun st' st => f (fst st') (fst st) st0 /\ (snd st') = 1) ltrue)
-                  (fun st => relt (st0,0) st)) ->
-    relt //\\ (fun st1 st2 => 0 <= (snd st2) <= T) |-- (fun st1 st2 => rel (fst st1) (fst st2)) ->
-    G |-- intersample_relation_valid2 rel sample.
-Proof.
-  unfold intersample_relation_valid2. simpl. intros. specialize (H0 _ H3). rename t into F.
-  apply (H2 (F (sample n), 0) (F t0, t0 - sample n)). split.
-  { apply (H1 (F (sample n)) (F (sample n), 0)); auto.
-    unfold evolve. exists (t0 - sample n). exists (fun r => (F (r + sample n), r)).
-    repeat split.
-    { psatzl R. }
-    { rewrite Rplus_0_l. reflexivity. }
-    { replace (t0 - sample n + sample n) with t0 by field. reflexivity. }
-    { destruct H0 as [D H0]. exists (fun x => (D (x + sample n), 1)). split.
-      { intros. admit. }
-      { intros. split.
-        { simpl. apply H0. psatzl R. }
-        { reflexivity. } } } }
-  { simpl. unfold bounded_samples in *. specialize (H n). psatzl R. }
-Admitted.
-*)
