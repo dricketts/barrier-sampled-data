@@ -302,6 +302,12 @@ Section DblInt.
     { charge_tauto. }
   Qed.
 
+  Lemma gamma_inv_gt_0 :
+   / gamma > 0.
+  Proof.
+    apply Rlt_gt; apply Rinv_0_lt_compat; psatzl R.
+  Qed.
+
   Lemma barrier_imp_x_lt_0 :
     forall stk : state,
       $[ Barrier [<=] # (violation * T)]
@@ -310,12 +316,19 @@ Section DblInt.
        (-/gamma).
   Proof.
     unfold Barrier, Barrier_lin, Barrier_sqr, exp_inductive, ODE. simpl. intros.
-    destruct H0. rewrite H0. rewrite_R0. clear - H gamma_gt_0 umax_gt_0 T_gt_0.
+    destruct H0. rewrite H0. rewrite_R0. pose proof gamma_inv_gt_0.
     destruct (Rle_dec (v t0) (umax * gamma)).
-    { smt solve; apply by_z3. }
-    { (*SearchAbout Rle Rge Rlt Rgt Rmult Rplus Ropp Rminus Rinv Rdiv.*)
-      rewrite Rmult_comm. rewrite <- Ropp_mult_distr_r. rewrite Ropp_mult_distr_l.
-      apply Rle_div_r; [ psatzl R | ]. smt solve; apply by_z3. }
+    { replace (- / gamma * (x t0 - violation * T))
+      with (/ gamma * (violation * T - x t0)) by (field; psatzl R).
+      rewrite <- H by psatzl R. right. field. psatzl R. }
+    { rewrite Rmult_comm. rewrite <- Ropp_mult_distr_r. rewrite Ropp_mult_distr_l.
+      apply Rle_div_r; [ psatzl R | ].
+      replace (- (x t0 - violation * T)) with (violation * T - x t0) by (field; psatzl R).
+      rewrite <- H. unfold Rdiv. assert (umax * gamma <= v t0) by psatzl R.
+      clear H n H3 H2 H0 H1 umax_le_f_umin u_barrier_constraint T_gt_0 umin_gt_0
+            u_le_umax neg_umax_le_u gamma_gt_0. apply Rmult_le_reg_l with (r:=2*umax).
+      { psatz R. }
+      { field_simplify; try psatzl R. repeat rewrite Rdiv_1. simpl. psatz R. } }
   Qed.
 
   Theorem x_lt_0 :
